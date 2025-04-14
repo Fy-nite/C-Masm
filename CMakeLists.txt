@@ -9,24 +9,32 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Add source files
 set(SOURCES
-    microasm_compiler.cpp
-    microasm_interpreter.cpp
+        microasm_compiler.cpp
+        microasm_interpreter.cpp
+        microasm_capi.cpp
+        
 )
 
 # Create a static library
-add_library(microasm_lib STATIC ${SOURCES})
+add_library(microasm_static STATIC ${SOURCES})
+set_target_properties(microasm_static PROPERTIES OUTPUT_NAME microasm)
 
-# Create the main executable using the same source files
-add_executable(masm main.cpp ${SOURCES})
+# Create a shared library
+add_library(microasm_shared SHARED ${SOURCES})
+set_target_properties(microasm_shared PROPERTIES OUTPUT_NAME microasm)
 
-# Install targets (optional)
-install(TARGETS microasm_lib
-        ARCHIVE DESTINATION lib
-        LIBRARY DESTINATION lib)
+# Create the main executable
+add_executable(masm main.cpp)
+target_link_libraries(masm microasm_static)
 
+# Install targets
+install(TARGETS microasm_static microasm_shared
+                ARCHIVE DESTINATION lib
+                LIBRARY DESTINATION lib
+                RUNTIME DESTINATION bin)
 
 install(FILES microasm_compiler.h microasm_interpreter.h operand_types.h common_defs.h debug_macros.h
-        DESTINATION include/microasm)
+                DESTINATION include/microasm)
 
 # Print status message
-message(STATUS "Configured MicroASM Toolchain build with static library.")
+message(STATUS "Configured MicroASM Toolchain build with static and shared libraries.")

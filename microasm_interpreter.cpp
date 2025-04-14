@@ -12,6 +12,7 @@
 #include <map>
 #include <functional>
 #include <iomanip>
+#include <sstream> // Add this header for std::stringstream
 
 // Include own header FIRST
 #include "microasm_interpreter.h"
@@ -284,8 +285,30 @@ void Interpreter::load(const std::string& bytecodeFile) {
     }
 }
 
+void Interpreter::setArguments(const std::vector<std::string>& args) {
+    cmdArgs = args;
+    if (debugMode) {
+        std::cout << "[Debug][Interpreter] Arguments set/updated. Count: " << cmdArgs.size() << "\n";
+    }
+}
+
+void Interpreter::setDebugMode(bool enabled) {
+    debugMode = enabled;
+     if (debugMode) {
+        std::cout << "[Debug][Interpreter] Debug mode explicitly set to: " << (enabled ? "ON" : "OFF") << "\n";
+    }
+}
+
 void Interpreter::execute() {
     if (debugMode) std::cout << "[Debug][Interpreter] Starting execution...\n";
+    // Reset flags before execution? Or assume they persist? Assume reset for now.
+    zeroFlag = false;
+    signFlag = false;
+    // IP should be set by load() or jump instructions
+
+    // Ensure SP and BP reflect register values at start
+    sp = registers[7];
+    bp = registers[6];
 
     while (ip < bytecode_raw.size()) {
         int currentIp = ip;
@@ -538,7 +561,11 @@ void Interpreter::execute() {
 
                 // Program Control
                 case HLT: { if(debugMode) std::cout << "[Debug][Interpreter] HLT encountered.\n"; std::cout << "HLT encountered. Execution finished." << std::endl; return; } // Halt execution
-                case ARGC: { registers[nextRawOperand().value] = cmdArgs.size(); break; }
+                case ARGC: {
+                    BytecodeOperand op_dest = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Dest): " << formatOperandDebug(op_dest) << "\n";
+                    registers[getRegisterIndex(op_dest)] = cmdArgs.size(); // Use cmdArgs member
+                    break;
+                }
                 case GETARG: {
                     BytecodeOperand op_dest = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Dest): " << formatOperandDebug(op_dest) << "\n";
                     BytecodeOperand op_index = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op2(Index): " << formatOperandDebug(op_index) << "\n";

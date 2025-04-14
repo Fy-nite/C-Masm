@@ -29,9 +29,9 @@ extern std::map<std::string, MniFunctionType> mniRegistry;
 void registerMNI(const std::string& module, const std::string& name, MniFunctionType func);
 
 class Interpreter {
-public: // Public members needed by MNI or main
-    std::vector<int> registers;
-    std::vector<char> ram;
+public: // Public members needed by C API or main
+    std::vector<int> registers; // Make public for direct access from C API wrapper
+    std::vector<char> ram;      // Make public for direct access from C API wrapper
 
 private: // Private members
     std::vector<uint8_t> bytecode_raw;
@@ -53,23 +53,29 @@ private: // Private members
     void initializeMNIFunctions();
     std::string formatOperandDebug(const BytecodeOperand& op);
 
-public: // Public methods including memory access for MNI
+public: // Public methods including memory access for C API
     // Constructor
     Interpreter(int ramSize = 65536, const std::vector<std::string>& args = {}, bool debug = false);
 
-    // Memory access helpers
+    // Memory access helpers (already public)
     int readRamInt(int address);
     void writeRamInt(int address, int value);
     char readRamChar(int address);
     void writeRamChar(int address, char value);
     std::string readRamString(int address);
 
-    // Main operations
+    // Main operations (already public)
     void load(const std::string& bytecodeFile);
     void execute();
 
-    // Public helper needed by MNI and internal logic
+    // Public helper needed by MNI and internal logic (already public)
     int getValue(const BytecodeOperand& operand);
+
+    // Add a way to set arguments after construction (needed for C API)
+    void setArguments(const std::vector<std::string>& args);
+
+    // Allow C API to enable/disable debug mode if needed post-creation
+    void setDebugMode(bool enabled);
 };
 
 // Declare the standalone main function for the interpreter

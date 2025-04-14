@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework> <!-- Or your preferred .NET version -->
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks> <!-- Needed if using pointers directly -->
+  </PropertyGroup>
+
+  <!-- This assumes the DLL is copied to the output directory -->
+  <!-- Adjust the path based on your CMake build output -->
+  <ItemGroup>
+    <None Update="..\build\Debug\microasm_runtime.dll"> <!-- Example path, adjust as needed -->
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+     <None Update="..\build\Release\microasm_runtime.dll"> <!-- Example path, adjust as needed -->
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+     <None Update="example.bin"> <!-- Add your test .bin file here -->
+       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+     </None>
+  </ItemGroup>
+
+</Project>

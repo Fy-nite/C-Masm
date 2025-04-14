@@ -3,6 +3,18 @@
 
 #include <cstdint> // Required for uint types
 
+// --- API Export/Import Macros ---
+#ifdef _WIN32
+    #ifdef MASM_DLL_EXPORT
+        #define MASM_API __declspec(dllexport) // Export for DLL
+    #else
+        #define MASM_API __declspec(dllimport) // Import for client
+    #endif
+#else
+    #define MASM_API __attribute__((visibility("default"))) // GCC/Clang
+#endif
+// --- End API Macros ---
+
 // Define a simple binary header structure
 struct BinaryHeader {
     uint32_t magic = 0x4D53414D; // "MASM" in ASCII (little-endian)
