@@ -33,11 +33,11 @@ void registerMNI(const std::string& module, const std::string& name, MniFunction
     std::string fullName = module + "." + name;
     if (mniRegistry.find(fullName) == mniRegistry.end()) {
         mniRegistry[fullName] = func;
-        // Optional: Add logging for successful registration
-        // std::cout << "Registered MNI function: " << fullName << std::endl;
+     
+        std::cout << "Registered MNI function: " << fullName << std::endl;
     } else {
-        // Optional: Add warning for duplicate registration attempt
-        // std::cerr << "Warning: MNI function " << fullName << " already registered." << std::endl;
+
+        std::cerr << "Warning: MNI function " << fullName << " already registered." << std::endl;
     }
 }
 

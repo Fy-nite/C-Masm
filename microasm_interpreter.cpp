@@ -283,7 +283,10 @@ public:
         if (header.magic != 0x4D53414D) { // "MASM"
             throw std::runtime_error("Invalid magic number in bytecode file. Not a MASM binary.");
         }
-        // Could add version checks here too
+        // Could add version checks here too 
+        if (header.version != 1) {
+            throw std::runtime_error("Unsupported bytecode version: " + std::to_string(header.version));
+        }
 
         // 3. Load Code Segment into bytecode_raw
         bytecode_raw.resize(header.codeSize);

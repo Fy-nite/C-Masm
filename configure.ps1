@@ -1,3 +1,6 @@
+# This script configures the build environment for the Micro-Assembly project.
+# It sets up the build directory based on the target operating system.
+
 param(
     [Parameter(Mandatory=$true)]
     [ValidateSet('windows', 'linux')]
