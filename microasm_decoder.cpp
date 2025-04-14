@@ -7,6 +7,58 @@
 #include <iomanip> // For std::hex, std::setw, std::setfill
 #include <unordered_map>
 #include "operand_types.h" // Include the shared operand type definitions
+#include <sstream>
+#include <map>
+#include <functional> // Required for std::function
+
+// Placeholder for the machine state (registers, memory, etc.)
+// In a real implementation, this would be a class or struct
+struct RegisterMachineState {
+    std::map<std::string, int> registers; // Example register map
+    std::vector<unsigned char> memory;    // Example memory
+    // ... other state like flags, stack pointer, etc.
+};
+
+// Define the type for MNI functions
+// It takes the machine state and a vector of string arguments (registers/immediates)
+using MniFunctionType = std::function<void(RegisterMachineState&, const std::vector<std::string>&)>;
+
+// Global registry for MNI functions
+std::map<std::string, MniFunctionType> mniRegistry;
+
+// Function to register MNI functions
+void registerMNI(const std::string& module, const std::string& name, MniFunctionType func) {
+    std::string fullName = module + "." + name;
+    if (mniRegistry.find(fullName) == mniRegistry.end()) {
+        mniRegistry[fullName] = func;
+        // Optional: Add logging for successful registration
+        // std::cout << "Registered MNI function: " << fullName << std::endl;
+    } else {
+        // Optional: Add warning for duplicate registration attempt
+        // std::cerr << "Warning: MNI function " << fullName << " already registered." << std::endl;
+    }
+}
+
+// Example MNI function implementation (replace with actual logic)
+void exampleMathSin(RegisterMachineState& machine, const std::vector<std::string>& args) {
+    if (args.size() != 2) {
+        std::cerr << "Error: Math.sin requires 2 arguments (src, dest)." << std::endl;
+        return;
+    }
+    // Basic example: assumes args are register names
+    // Real implementation needs robust parsing (registers, immediates, memory addresses)
+    // and type checking/conversion.
+    // machine.registers[args[1]] = static_cast<int>(sin(machine.registers[args[0]]));
+    std::cout << "Called Math.sin with args: " << args[0] << ", " << args[1] << std::endl;
+}
+
+// Function to initialize MNI functions (call this during startup)
+void initializeMNIFunctions() {
+    registerMNI("Math", "sin", exampleMathSin);
+    // Register other MNI functions here...
+    // registerMNI("Memory", "allocate", ...);
+    // registerMNI("IO", "write", ...);
+}
 
 // Define the same binary header structure as the compiler/interpreter
 struct BinaryHeader {
@@ -18,8 +70,7 @@ struct BinaryHeader {
     uint32_t entryPoint = 0;
 };
 
-// Use the same Opcode enum as the compiler/interpreter
-// (Duplicated here for simplicity, could be shared in a header)
+// Use the same Opcode enum as the compiler/interpreter - Added MNI
 enum Opcode {
     // Basic
     MOV = 0x01, ADD, SUB, MUL, DIV, INC,
@@ -44,10 +95,11 @@ enum Opcode {
     // Stack Frame
     ENTER, LEAVE,
     // String/Memory Ops
-    COPY, FILL, CMP_MEM
+    COPY, FILL, CMP_MEM,
+    MNI // Added MNI Opcode
 };
 
-// Helper map to get mnemonic string from Opcode
+// Helper map to get mnemonic string from Opcode - Added MNI
 const std::unordered_map<Opcode, std::string> opcodeToString = {
     {MOV, "MOV"}, {ADD, "ADD"}, {SUB, "SUB"}, {MUL, "MUL"}, {DIV, "DIV"}, {INC, "INC"},
     {JMP, "JMP"}, {CMP, "CMP"}, {JE, "JE"}, {JL, "JL"}, {CALL, "CALL"}, {RET, "RET"},
@@ -58,10 +110,11 @@ const std::unordered_map<Opcode, std::string> opcodeToString = {
     {MOVADDR, "MOVADDR"}, {MOVTO, "MOVTO"},
     {JNE, "JNE"}, {JG, "JG"}, {JLE, "JLE"}, {JGE, "JGE"},
     {ENTER, "ENTER"}, {LEAVE, "LEAVE"},
-    {COPY, "COPY"}, {FILL, "FILL"}, {CMP_MEM, "CMP_MEM"}
+    {COPY, "COPY"}, {FILL, "FILL"}, {CMP_MEM, "CMP_MEM"},
+    {MNI, "MNI"} // Added MNI mapping
 };
 
-// Helper map to get the number of operands for each Opcode
+// Helper map to get the number of operands for each Opcode - MNI needs special handling
 const std::unordered_map<Opcode, int> opcodeOperandCount = {
     {MOV, 2}, {ADD, 2}, {SUB, 2}, {MUL, 2}, {DIV, 2}, {INC, 1},
     {JMP, 1}, {CMP, 2}, {JE, 1}, {JL, 1}, {CALL, 1}, {RET, 0},
@@ -72,7 +125,8 @@ const std::unordered_map<Opcode, int> opcodeOperandCount = {
     {MOVADDR, 3}, {MOVTO, 3},
     {JNE, 1}, {JG, 1}, {JLE, 1}, {JGE, 1},
     {ENTER, 1}, {LEAVE, 0},
-    {COPY, 3}, {FILL, 3}, {CMP_MEM, 3}
+    {COPY, 3}, {FILL, 3}, {CMP_MEM, 3},
+    {MNI, -1} // Indicate variable/special handling for MNI
 };
 
 // Helper map for register names (index to name)
@@ -84,6 +138,20 @@ const std::unordered_map<int, std::string> registerIndexToString = {
     {16, "R8"}, {17, "R9"}, {18, "R10"}, {19, "R11"},
     {20, "R12"}, {21, "R13"}, {22, "R14"}, {23, "R15"}
 };
+
+// Helper function to read a null-terminated string from a byte vector at a given offset
+std::string readStringFromVector(const std::vector<uint8_t>& vec, uint32_t& offset) {
+    std::string str = "";
+    while (offset < vec.size()) {
+        char c = static_cast<char>(vec[offset++]);
+        if (c == '\0') {
+            break;
+        }
+        str += c;
+    }
+    // Optional: Check if null terminator was found before end of vector
+    return str;
+}
 
 std::string formatOperand(OperandType type, int value) {
     switch (type) {
@@ -108,7 +176,8 @@ std::string formatOperand(OperandType type, int value) {
     }
 }
 
-int decoder_main(int argc, char* argv[]) {
+// Renamed decoder_main back to main
+int main(int argc, char* argv[]) {
     if (argc != 2) {
         std::cerr << "Usage: microasm_decoder <input.bin>" << std::endl;
         return 1;
@@ -156,7 +225,34 @@ int decoder_main(int argc, char* argv[]) {
 
             std::cout << std::setw(4) << std::setfill('0') << instructionStartIp << ": ";
 
-            if (opcodeToString.count(opcode)) {
+            if (opcode == MNI) {
+                // Special handling for MNI opcode
+                std::cout << std::setw(8) << std::left << "MNI" << std::right;
+                // Read the null-terminated function name
+                std::string functionName = readStringFromVector(codeSegment, ip);
+                std::cout << " " << functionName;
+
+                // Read operands until the NONE marker
+                while (ip < header.codeSize) {
+                     if (ip + 1 + sizeof(int) > header.codeSize) {
+                         throw std::runtime_error("Unexpected end of code segment while reading MNI operand/marker at offset " + std::to_string(instructionStartIp));
+                     }
+                    OperandType opType = static_cast<OperandType>(codeSegment[ip]);
+                    // Peek ahead to check for NONE marker without consuming ip yet for value read
+                    if (opType == OperandType::NONE) {
+                        ip += 1 + sizeof(int); // Consume type and value for the marker
+                        break; // End of MNI arguments
+                    }
+                    // Read the actual operand if not the marker
+                    ip++; // Consume type byte
+                    int opValue = *reinterpret_cast<const int*>(&codeSegment[ip]);
+                    ip += sizeof(int); // Consume value bytes
+                    std::cout << " " << formatOperand(opType, opValue);
+                }
+                 std::cout << std::endl;
+
+            } else if (opcodeToString.count(opcode)) {
+                // Handle regular opcodes
                 std::cout << std::setw(8) << std::left << opcodeToString.at(opcode) << std::right;
 
                 int numOperands = 0;
@@ -164,6 +260,8 @@ int decoder_main(int argc, char* argv[]) {
                     numOperands = opcodeOperandCount.at(opcode);
                 } else {
                     std::cout << " !Unknown Operand Count!";
+                    // Decide how to proceed: stop, skip bytes? Stopping is safer.
+                     throw std::runtime_error("Opcode 0x" + std::to_string(static_cast<int>(opcode)) + " found but has no defined operand count.");
                 }
 
                 for (int i = 0; i < numOperands; ++i) {
@@ -178,6 +276,7 @@ int decoder_main(int argc, char* argv[]) {
                 std::cout << std::endl;
 
             } else {
+                // Handle unknown opcodes
                 std::cout << "Unknown Opcode (0x" << std::hex << static_cast<int>(opcode) << std::dec << ")" << std::endl;
                 // Attempt to recover or stop? For now, stop.
                 throw std::runtime_error("Encountered unknown opcode during decoding.");

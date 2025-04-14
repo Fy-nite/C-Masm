@@ -9,6 +9,8 @@
 #include <limits> // For integer limits
 #include <cstring> // Required for memcpy, memset, memcmp
 #include <cstdint> // Required for uint32_t
+#include <map>     // Required for MNI registry
+#include <functional> // Required for MNI registry (std::function)
 #include "operand_types.h" // Include the new operand type definitions
 
 // Define the same binary header structure as the compiler
@@ -46,7 +48,9 @@ enum Opcode {
     // Stack Frame
     ENTER, LEAVE,
     // String/Memory Ops
-    COPY, FILL, CMP_MEM
+    COPY, FILL, CMP_MEM,
+    // Module Native Interface call
+    MNI // Added MNI Opcode
 };
 
 // Structure to hold operand info read from bytecode
@@ -55,10 +59,32 @@ struct BytecodeOperand {
     int value;
 };
 
+// Forward declaration
+class Interpreter;
+
+// Define the type for MNI functions (updated signature)
+using MniFunctionType = std::function<void(Interpreter&, const std::vector<BytecodeOperand>&)>;
+
+// Global registry for MNI functions (could be member of Interpreter if preferred)
+std::map<std::string, MniFunctionType> mniRegistry;
+
+// Function to register MNI functions (can be called externally or internally)
+void registerMNI(const std::string& module, const std::string& name, MniFunctionType func) {
+    std::string fullName = module + "." + name;
+    if (mniRegistry.find(fullName) == mniRegistry.end()) {
+        mniRegistry[fullName] = func;
+        // Optional: std::cout << "Registered MNI function: " << fullName << std::endl;
+    } else {
+        // Optional: std::cerr << "Warning: MNI function " << fullName << " already registered." << std::endl;
+    }
+}
+
 class Interpreter {
     // Registers: RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP (0-7) + R0-R15 (8-23)
+public: // Make getValue public for MNI functions
     std::vector<int> registers;
     std::vector<char> ram; // Main memory (bytes)
+private:
     std::vector<uint8_t> bytecode_raw; // Store raw bytes of the CODE segment only
     int dataSegmentBase; // Base address in RAM where the data segment is loaded
     int ip = 0; // Instruction pointer (index into bytecode_raw vector)
@@ -119,6 +145,7 @@ class Interpreter {
     }
 
     // Memory access helpers (handle potential out-of-bounds)
+public: // Make memory access public for MNI functions
     int readRamInt(int address) {
         if (address < 0 || address + sizeof(int) > ram.size()) {
             throw std::runtime_error("Memory read out of bounds at address: " + std::to_string(address));
@@ -159,6 +186,7 @@ class Interpreter {
         return str;
     }
 
+private: // Make stack ops private again if not needed by MNI directly
     // Stack operations using RAM and RSP register
     void pushStack(int value) {
         registers[7] -= sizeof(int); // Decrement RSP (stack grows down)
@@ -173,6 +201,50 @@ class Interpreter {
         return value;
     }
 
+    // Helper to read null-terminated string from bytecode
+    std::string readBytecodeString() {
+        std::string str = "";
+        while (ip < bytecode_raw.size()) {
+            char c = static_cast<char>(bytecode_raw[ip++]);
+            if (c == '\0') {
+                break;
+            }
+            str += c;
+        }
+        // Consider adding a check if ip reached end without null terminator
+        return str;
+    }
+
+    // Initialize built-in MNI functions
+    void initializeMNIFunctions() {
+        // Example: Math.sin R1 R2 (R1=input reg, R2=output reg)
+        registerMNI("Math", "sin", [](Interpreter& machine, const std::vector<BytecodeOperand>& args) {
+            if (args.size() != 2) throw std::runtime_error("Math.sin requires 2 arguments (srcReg, destReg)");
+            int srcReg = machine.getRegisterIndex(args[0]);
+            int destReg = machine.getRegisterIndex(args[1]);
+            // Note: Using double for calculation, storing as int
+            machine.registers[destReg] = static_cast<int>(std::sin(static_cast<double>(machine.registers[srcReg])));
+        });
+
+        // Example: IO.write 1 R1 (Port=1/2, R1=address of null-terminated string in RAM)
+        registerMNI("IO", "write", [](Interpreter& machine, const std::vector<BytecodeOperand>& args) {
+            if (args.size() != 2) throw std::runtime_error("IO.write requires 2 arguments (port, addressReg/Imm)");
+            int port = machine.getValue(args[0]); // Port can be immediate or register
+            int address = machine.getValue(args[1]); // Address MUST resolve to a RAM location
+            if (args[1].type != OperandType::REGISTER && args[1].type != OperandType::DATA_ADDRESS && args[1].type != OperandType::IMMEDIATE) {
+                 throw std::runtime_error("IO.write address argument must be register, data address, or immediate address");
+            }
+
+            std::ostream& out_stream = (port == 2) ? std::cerr : std::cout;
+             if (port != 1 && port != 2) throw std::runtime_error("Invalid port for IO.write: " + std::to_string(port));
+
+            out_stream << machine.readRamString(address); // Read null-terminated string from RAM
+        });
+
+        // Add more MNI function registrations here (Memory.allocate, StringOperations.concat, etc.)
+        // Memory.allocate R1 R2 (R1=size, R2=destReg for address) - Needs heap management!
+        // StringOperations.concat R1 R2 R3 (R1=addr1, R2=addr2, R3=destAddr) - Needs memory allocation!
+    }
 
 public:
     // Constructor: Initialize registers, RAM, stack pointer, data segment base
@@ -191,6 +263,9 @@ public:
         // Ensure this doesn't collide with stack growing down!
         dataSegmentBase = ramSize / 2;
         if (dataSegmentBase < 0) dataSegmentBase = 0; // Handle tiny RAM sizes
+
+        // Initialize MNI functions
+        initializeMNIFunctions();
     }
 
     // Load bytecode from file, read header, load segments
@@ -575,6 +650,24 @@ public:
                         break;
                     }
 
+                    case MNI: {
+                        std::string functionName = readBytecodeString(); // Read Module.Function\0
+                        std::vector<BytecodeOperand> mniArgs;
+                        while(true) {
+                            BytecodeOperand arg = nextRawOperand();
+                            if (arg.type == OperandType::NONE) {
+                                break; // End of arguments marker
+                            }
+                            mniArgs.push_back(arg);
+                        }
+
+                        if (mniRegistry.count(functionName)) {
+                            mniRegistry[functionName](*this, mniArgs); // Call the registered function
+                        } else {
+                            throw std::runtime_error("Unregistered MNI function called: " + functionName);
+                        }
+                        break;
+                    }
 
                     default:
                         throw std::runtime_error("Unimplemented or unknown opcode encountered during execution: 0x" + std::to_string(opcode));

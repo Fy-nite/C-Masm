@@ -9,6 +9,8 @@
 #include <cctype>    // Required for std::isspace
 #include <climits>   // Required for INT_MIN, INT_MAX
 #include <cstdint> // Required for uint32_t
+#include <map>     // Required for MNI registry in interpreter part (if merged later)
+#include <functional> // Required for MNI registry in interpreter part (if merged later)
 #include "operand_types.h" // Include the new operand type definitions
 
 // Define a simple binary header structure
@@ -21,7 +23,7 @@ struct BinaryHeader {
     uint32_t entryPoint = 0; // Offset within the code segment
 };
 
-// Updated Opcode Enum - Removed MOVI
+// Updated Opcode Enum - Added MNI
 enum Opcode {
     // Basic
     MOV = 0x01, ADD, SUB, MUL, DIV, INC, // MOVI removed
@@ -46,12 +48,15 @@ enum Opcode {
     // Stack Frame
     ENTER, LEAVE,
     // String/Memory Ops
-    COPY, FILL, CMP_MEM
+    COPY, FILL, CMP_MEM,
+    // Module Native Interface call
+    MNI // Added MNI Opcode
 };
 
 struct Instruction {
     Opcode opcode;
     std::vector<std::string> operands;
+    std::string mniFunctionName; // Store MNI function name if opcode is MNI
 };
 
 // Structure to hold resolved operand info
@@ -67,6 +72,21 @@ class Compiler {
     std::unordered_map<std::string, int> dataLabels; // Map data labels ($1) to offsets
     int currentAddress = 0;
     int dataAddress = 0; // Track data segment size/address
+
+    int calculateInstructionSize(const Instruction& instr) {
+        if (instr.opcode == DB || instr.opcode == LBL) return 0; // Pseudo-instructions
+
+        if (instr.opcode == MNI) {
+            int size = 1; // Opcode
+            size += instr.mniFunctionName.length() + 1; // Name + Null terminator
+            size += instr.operands.size() * (1 + sizeof(int)); // Operands (Type + Value)
+            size += 1 + sizeof(int); // End marker (Type + Value)
+            return size;
+        } else {
+            // Regular instruction size
+            return 1 + instr.operands.size() * (1 + sizeof(int));
+        }
+    }
 
 public:
     void parse(const std::string& source) {
@@ -139,6 +159,24 @@ public:
              dataSegment.push_back('\0'); // Null-terminate for convenience
              dataAddress += processedValue.length() + 1;
 
+        } else if (upperToken == "MNI") {
+            Instruction instr;
+            instr.opcode = MNI;
+            stream >> instr.mniFunctionName; // Read Module.Function name
+            if (instr.mniFunctionName.empty()) {
+                throw std::runtime_error("MNI instruction requires a function name (e.g., Module.Function)");
+            }
+            // Validate name format roughly (contains '.')
+            if (instr.mniFunctionName.find('.') == std::string::npos) {
+                 throw std::runtime_error("Invalid MNI function name format: " + instr.mniFunctionName + " (expected Module.Function)");
+            }
+
+            std::string operand;
+            while (stream >> operand) {
+                instr.operands.push_back(operand);
+            }
+            instructions.push_back(instr);
+            currentAddress += calculateInstructionSize(instr); // Use helper for size calculation
         } else {
             Instruction instr;
             try {
@@ -158,8 +196,7 @@ public:
             // For now, resolveOperand handles immediate detection.
 
             instructions.push_back(instr);
-            // Increment address: 1 byte opcode + (1 byte type + 4 bytes value) per operand
-            currentAddress += 1 + instr.operands.size() * (1 + sizeof(int));
+            currentAddress += calculateInstructionSize(instr); // Use helper for size calculation
         }
     }
 
@@ -168,7 +205,7 @@ public:
         std::string upperMnemonic = mnemonic;
         std::transform(upperMnemonic.begin(), upperMnemonic.end(), upperMnemonic.begin(), ::toupper);
 
-        // Updated map - MOVI removed
+        // Updated map - Added MNI
         static std::unordered_map<std::string, Opcode> opcodeMap = {
             {"MOV", MOV}, {"ADD", ADD}, {"SUB", SUB}, {"MUL", MUL}, {"DIV", DIV}, {"INC", INC}, // MOVI removed
             {"JMP", JMP}, {"CMP", CMP}, {"JE", JE}, {"JL", JL}, {"CALL", CALL}, {"RET", RET},
@@ -181,7 +218,8 @@ public:
             {"MOVADDR", MOVADDR}, {"MOVTO", MOVTO},
             {"JNE", JNE}, {"JG", JG}, {"JLE", JLE}, {"JGE", JGE},
             {"ENTER", ENTER}, {"LEAVE", LEAVE},
-            {"COPY", COPY}, {"FILL", FILL}, {"CMP_MEM", CMP_MEM}
+            {"COPY", COPY}, {"FILL", FILL}, {"CMP_MEM", CMP_MEM},
+            {"MNI", MNI} // Added MNI mapping
         };
         // Use .at() for bounds checking which throws std::out_of_range if key not found
         return opcodeMap.at(upperMnemonic);
@@ -191,12 +229,10 @@ public:
         std::ofstream out(outputFile, std::ios::binary);
         if (!out) throw std::runtime_error("Cannot open output file: " + outputFile);
 
-        // Calculate actual code size
+        // Calculate actual code size using the helper
         uint32_t actualCodeSize = 0;
         for (const auto& instr : instructions) {
-            if (instr.opcode == DB) continue; // Skip DB pseudo-instruction
-            actualCodeSize += 1; // Opcode
-            actualCodeSize += instr.operands.size() * (1 + sizeof(int)); // Type + Value per operand
+            actualCodeSize += calculateInstructionSize(instr);
         }
 
         // Prepare the header
@@ -210,13 +246,35 @@ public:
 
         // Write code segment
         for (const auto& instr : instructions) {
-            if (instr.opcode == DB) continue; // Skip DB pseudo-instruction in code segment
+            if (instr.opcode == DB || instr.opcode == LBL) continue; // Skip pseudo-instructions
 
             out.put(static_cast<char>(instr.opcode)); // Write Opcode (1 byte)
-            for (const auto& operand : instr.operands) {
-                ResolvedOperand resolved = resolveOperand(operand, instr.opcode); // Pass opcode for context if needed
-                out.put(static_cast<char>(resolved.type)); // Write Operand Type (1 byte)
-                out.write(reinterpret_cast<const char*>(&resolved.value), sizeof(resolved.value)); // Write Operand Value (4 bytes)
+
+            if (instr.opcode == MNI) {
+                // Write null-terminated function name
+                out.write(instr.mniFunctionName.c_str(), instr.mniFunctionName.length());
+                out.put('\0');
+
+                // Write operands
+                for (const auto& operand : instr.operands) {
+                    ResolvedOperand resolved = resolveOperand(operand, instr.opcode);
+                    out.put(static_cast<char>(resolved.type));
+                    out.write(reinterpret_cast<const char*>(&resolved.value), sizeof(resolved.value));
+                }
+                // Write end marker
+                ResolvedOperand endMarker;
+                endMarker.type = OperandType::NONE;
+                endMarker.value = 0;
+                out.put(static_cast<char>(endMarker.type));
+                out.write(reinterpret_cast<const char*>(&endMarker.value), sizeof(endMarker.value));
+
+            } else {
+                // Write regular operands
+                for (const auto& operand : instr.operands) {
+                    ResolvedOperand resolved = resolveOperand(operand, instr.opcode);
+                    out.put(static_cast<char>(resolved.type));
+                    out.write(reinterpret_cast<const char*>(&resolved.value), sizeof(resolved.value));
+                }
             }
         }
 

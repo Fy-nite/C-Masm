@@ -564,3 +564,4 @@ HLT
 - All numeric values are treated as 64-bit integers unless specified otherwise
 - String operations assume null-terminated strings
 - Always free allocated memory to prevent memory leaks
+- **MNI in C++:** The C++ implementation typically uses a `registerMNI` function call within the C++ code itself to make MNI functions available to the MicroASM interpreter, rather than relying solely on dynamic loading from external libraries at runtime. Loaders for external libraries (DLLs, JARs) can be built on top of this registration system.
