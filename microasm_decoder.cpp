@@ -108,7 +108,7 @@ std::string formatOperand(OperandType type, int value) {
     }
 }
 
-int main(int argc, char* argv[]) {
+int decoder_main(int argc, char* argv[]) {
     if (argc != 2) {
         std::cerr << "Usage: microasm_decoder <input.bin>" << std::endl;
         return 1;

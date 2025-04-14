@@ -249,7 +249,7 @@ public:
     void execute() {
         // ip is already set by load()
         // while (ip < bytecode_raw.size()) { // Condition remains the same
-        // ... rest of execute function is unchanged ...
+
         while (ip < bytecode_raw.size()) {
             int currentIp = ip;
             Opcode opcode = static_cast<Opcode>(bytecode_raw[ip++]); // Read opcode
@@ -381,10 +381,10 @@ public:
                         if (op_val.type == OperandType::DATA_ADDRESS) {
                             // It's an address (offset resolved by compiler, base added by getValue)
                             int address = getValue(op_val); // getValue now correctly calculates absolute RAM address
-                            out_stream << readRamString(address) << std::endl;
+                            out_stream << readRamString(address); // Removed std::endl
                         } else {
                             // It's an immediate value or register value
-                            out_stream << getValue(op_val) << std::endl;
+                            out_stream << getValue(op_val); // Removed std::endl
                         }
                         break;
                     }
@@ -588,15 +588,18 @@ public:
     }
 };
 
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: microasm_interpreter <bytecode.bin> [args...]" << std::endl;
+int microasm_interpreter_main(int argc, char* argv[]) {
+    // Expects argv[0] = bytecode file, argv[1...] = program args
+    if (argc < 1) { // Need at least the bytecode file name (argc >= 1)
+        // Updated usage message
+        std::cerr << "Interpreter Usage: <bytecode.bin> [args...]" << std::endl;
         return 1;
     }
 
-    std::string bytecodeFile = argv[1];
+    std::string bytecodeFile = argv[0]; // Bytecode file is now argv[0]
     std::vector<std::string> programArgs;
-    for (int i = 2; i < argc; ++i) {
+    // Program arguments start from argv[1]
+    for (int i = 1; i < argc; ++i) {
         programArgs.push_back(argv[i]);
     }
 
