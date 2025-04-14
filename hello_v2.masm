@@ -1,0 +1,19 @@
+; MicroASM Hello World Example (v2 using DB and OUT)
+
+DB $1 "Hello, World!\n" 
+; place at the offset of hello world + 2
+DB $17 "meow meow meow"
+; Define string at data label $1
+
+; The compiler resolves $1 to an offset (e.g., 0).
+; The interpreter needs to know the data segment base address.
+; Let's assume compiler outputs 0 for $1 and interpreter adds base address (e.g., 32768).
+
+; Output the string constant at address $1 (offset 0) to stdout (port 1)
+OUT 1 $1
+OUT 1 $17
+; Output the number 123 to stderr (port 2)
+OUT 2 123
+
+; Halt the program
+HLT

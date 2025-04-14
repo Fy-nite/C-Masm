@@ -1,0 +1,74 @@
+# CMake build directories
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+.cmake/
+
+# Build outputs
+*.exe
+*.obj
+*.o
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.pdb
+*.ilk
+*.exp
+*.out
+
+# Visual Studio files
+.vs/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Rr]eleases/
+[Mm]in[Ss]ize[Rr]el/
+[Rr]el[Ww]ith[Dd]eb[Ii]nfo/
+
+# Generated files
+Makefile
+Makefile2
+*.stamp
+*.depend
+*.rule
+*.list
+*.check_cache
+*.mk
+
+# Compiler outputs
+microasm_compiler
+microasm_interpreter
+
+# Dependency directories
+external/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*~
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.idea/
+*.sublime-*
