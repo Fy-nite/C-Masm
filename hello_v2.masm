@@ -1,1 +1,3 @@
-MNI IO.write 
+lbl main
+db $50 "Hello, World!"
+MNI IO.write 1 $50

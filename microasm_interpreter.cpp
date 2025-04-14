@@ -73,9 +73,9 @@ void registerMNI(const std::string& module, const std::string& name, MniFunction
     std::string fullName = module + "." + name;
     if (mniRegistry.find(fullName) == mniRegistry.end()) {
         mniRegistry[fullName] = func;
-        // Optional: std::cout << "Registered MNI function: " << fullName << std::endl;
+       std::cout << "Registered MNI function: " << fullName << std::endl;
     } else {
-        // Optional: std::cerr << "Warning: MNI function " << fullName << " already registered." << std::endl;
+       std::cerr << "Warning: MNI function " << fullName << " already registered." << std::endl;
     }
 }
 
@@ -232,7 +232,7 @@ private: // Make stack ops private again if not needed by MNI directly
             int port = machine.getValue(args[0]); // Port can be immediate or register
             int address = machine.getValue(args[1]); // Address MUST resolve to a RAM location
             if (args[1].type != OperandType::REGISTER && args[1].type != OperandType::DATA_ADDRESS && args[1].type != OperandType::IMMEDIATE) {
-                 throw std::runtime_error("IO.write address argument must be register, data address, or immediate address");
+                 throw std::runtime_error("IO.write address argument must be register or data address");
             }
 
             std::ostream& out_stream = (port == 2) ? std::cerr : std::cout;
@@ -241,7 +241,7 @@ private: // Make stack ops private again if not needed by MNI directly
             out_stream << machine.readRamString(address); // Read null-terminated string from RAM
         });
 
-        // Add more MNI function registrations here (Memory.allocate, StringOperations.concat, etc.)
+
         // Memory.allocate R1 R2 (R1=size, R2=destReg for address) - Needs heap management!
         // StringOperations.concat R1 R2 R3 (R1=addr1, R2=addr2, R3=destAddr) - Needs memory allocation!
     }

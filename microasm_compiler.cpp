@@ -235,11 +235,21 @@ public:
             actualCodeSize += calculateInstructionSize(instr);
         }
 
+        // --- Check for main label and set entry point ---
+        uint32_t entryPointAddress = 0;
+        std::string mainLabelName = "#main"; // The label name we expect
+        if (labelMap.count(mainLabelName)) {
+            entryPointAddress = labelMap.at(mainLabelName);
+        } else {
+            throw std::runtime_error("Compilation failed: Entry point label '#main' not found.");
+        }
+        // --- End check ---
+
         // Prepare the header
         BinaryHeader header;
         header.codeSize = actualCodeSize;
         header.dataSize = dataSegment.size();
-        header.entryPoint = 0; // Assuming execution starts at the beginning of code segment
+        header.entryPoint = entryPointAddress; // Set the found entry point
 
         // Write the header
         out.write(reinterpret_cast<const char*>(&header), sizeof(header));

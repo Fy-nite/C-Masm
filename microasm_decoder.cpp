@@ -10,6 +10,8 @@
 #include <sstream>
 #include <map>
 #include <functional> // Required for std::function
+#include <set>     // For storing referenced data offsets
+#include <cctype>  // For isprint
 
 // Placeholder for the machine state (registers, memory, etc.)
 // In a real implementation, this would be a class or struct
@@ -176,6 +178,37 @@ std::string formatOperand(OperandType type, int value) {
     }
 }
 
+// Helper function to format a sequence of bytes as hex
+std::string formatBytesToHex(const std::vector<uint8_t>& vec, uint32_t start, uint32_t end) {
+    std::stringstream ss;
+    for (uint32_t i = start; i < end && i < vec.size(); ++i) {
+        ss << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(vec[i]) << " ";
+    }
+    return ss.str();
+}
+
+// Helper function to escape non-printable characters for string output
+std::string escapeString(const std::string& s) {
+    std::stringstream ss;
+    for (char c : s) {
+        if (c == '\n') {
+            ss << "\\n";
+        } else if (c == '\t') {
+            ss << "\\t";
+        } else if (c == '\\') {
+            ss << "\\\\";
+        } else if (c == '"') {
+            ss << "\\\"";
+        } else if (std::isprint(static_cast<unsigned char>(c))) {
+            ss << c;
+        } else {
+            // Output non-printable chars as hex escapes
+            ss << "\\x" << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(static_cast<unsigned char>(c));
+        }
+    }
+    return ss.str();
+}
+
 // Renamed decoder_main back to main
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -209,8 +242,13 @@ int main(int argc, char* argv[]) {
         std::cout << "Entry Point:" << header.entryPoint << " (offset)" << std::endl;
         std::cout << "--------------" << std::endl << std::endl;
 
+        // Set to store data segment offsets referenced by the code
+        std::set<uint32_t> referencedDataOffsets;
+
         // 2. Decode Code Segment
         std::cout << "--- Code Segment (Size: " << header.codeSize << ") ---" << std::endl;
+        std::cout << "Offset  | Bytes        | Disassembly" << std::endl;
+        std::cout << "--------|--------------|--------------------------------" << std::endl;
         std::vector<uint8_t> codeSegment(header.codeSize);
         if (header.codeSize > 0) {
             if (!in.read(reinterpret_cast<char*>(codeSegment.data()), header.codeSize)) {
@@ -223,87 +261,163 @@ int main(int argc, char* argv[]) {
             uint32_t instructionStartIp = ip;
             Opcode opcode = static_cast<Opcode>(codeSegment[ip++]);
 
-            std::cout << std::setw(4) << std::setfill('0') << instructionStartIp << ": ";
+            // Store operands temporarily to calculate instruction size *before* printing hex bytes
+            std::vector<std::pair<OperandType, int>> currentOperands;
+            std::string mniFunctionName = ""; // For MNI
+            uint32_t tempIp = ip; // Use a temporary IP to parse operands without advancing the main ip
 
+            try { // Inner try-catch for operand parsing to determine instruction size
+                if (opcode == MNI) {
+                    mniFunctionName = readStringFromVector(codeSegment, tempIp);
+                    while (tempIp < header.codeSize) {
+                        if (tempIp + 1 + sizeof(int) > header.codeSize) {
+                             throw std::runtime_error("Unexpected end of code segment while reading MNI operand/marker");
+                        }
+                        OperandType opType = static_cast<OperandType>(codeSegment[tempIp]);
+                        int opValue = *reinterpret_cast<const int*>(&codeSegment[tempIp + 1]);
+
+                        if (opType == OperandType::NONE) {
+                            tempIp += 1 + sizeof(int); // Consume marker
+                            break; // End of MNI arguments
+                        }
+                        currentOperands.push_back({opType, opValue});
+                        tempIp += 1 + sizeof(int); // Consume operand
+                        if (opType == OperandType::DATA_ADDRESS) {
+                            referencedDataOffsets.insert(static_cast<uint32_t>(opValue));
+                        }
+                    }
+                } else if (opcodeOperandCount.count(opcode)) {
+                    int numOperands = opcodeOperandCount.at(opcode);
+                    for (int i = 0; i < numOperands; ++i) {
+                        if (tempIp + 1 + sizeof(int) > header.codeSize) {
+                            throw std::runtime_error("Unexpected end of code segment while reading operand " + std::to_string(i+1));
+                        }
+                        OperandType opType = static_cast<OperandType>(codeSegment[tempIp]);
+                        int opValue = *reinterpret_cast<const int*>(&codeSegment[tempIp + 1]);
+                        currentOperands.push_back({opType, opValue});
+                        tempIp += 1 + sizeof(int); // Consume operand
+                        if (opType == OperandType::DATA_ADDRESS) {
+                            referencedDataOffsets.insert(static_cast<uint32_t>(opValue));
+                        }
+                    }
+                } else if (!opcodeToString.count(opcode)) {
+                     throw std::runtime_error("Unknown opcode encountered."); // Handle unknown opcode early
+                }
+                // If opcode is known but count is missing (shouldn't happen with current setup)
+                // else { throw std::runtime_error("Missing operand count for known opcode."); }
+
+            } catch (const std::exception& operandEx) {
+                 // Can't determine full instruction size if operands are bad
+                 std::cerr << "Error parsing operands at offset " << instructionStartIp << ": " << operandEx.what() << std::endl;
+                 tempIp = ip; // Reset tempIp, print only opcode byte maybe?
+                 // Or rethrow / break loop
+                 throw;
+            }
+
+            uint32_t instructionEndIp = tempIp; // End of the current instruction bytes
+
+            // Print Offset
+            std::cout << std::setw(7) << std::setfill('0') << instructionStartIp << " | ";
+            // Print Hex Bytes
+            std::string hexBytes = formatBytesToHex(codeSegment, instructionStartIp, instructionEndIp);
+            std::cout << std::setw(12) << std::left << hexBytes << " | ";
+            std::cout << std::setfill(' '); // Reset fill character
+
+            // Print Disassembly
             if (opcode == MNI) {
-                // Special handling for MNI opcode
-                std::cout << std::setw(8) << std::left << "MNI" << std::right;
-                // Read the null-terminated function name
-                std::string functionName = readStringFromVector(codeSegment, ip);
-                std::cout << " " << functionName;
-
-                // Read operands until the NONE marker
-                while (ip < header.codeSize) {
-                     if (ip + 1 + sizeof(int) > header.codeSize) {
-                         throw std::runtime_error("Unexpected end of code segment while reading MNI operand/marker at offset " + std::to_string(instructionStartIp));
-                     }
-                    OperandType opType = static_cast<OperandType>(codeSegment[ip]);
-                    // Peek ahead to check for NONE marker without consuming ip yet for value read
-                    if (opType == OperandType::NONE) {
-                        ip += 1 + sizeof(int); // Consume type and value for the marker
-                        break; // End of MNI arguments
-                    }
-                    // Read the actual operand if not the marker
-                    ip++; // Consume type byte
-                    int opValue = *reinterpret_cast<const int*>(&codeSegment[ip]);
-                    ip += sizeof(int); // Consume value bytes
-                    std::cout << " " << formatOperand(opType, opValue);
-                }
-                 std::cout << std::endl;
-
-            } else if (opcodeToString.count(opcode)) {
-                // Handle regular opcodes
-                std::cout << std::setw(8) << std::left << opcodeToString.at(opcode) << std::right;
-
-                int numOperands = 0;
-                if (opcodeOperandCount.count(opcode)) {
-                    numOperands = opcodeOperandCount.at(opcode);
-                } else {
-                    std::cout << " !Unknown Operand Count!";
-                    // Decide how to proceed: stop, skip bytes? Stopping is safer.
-                     throw std::runtime_error("Opcode 0x" + std::to_string(static_cast<int>(opcode)) + " found but has no defined operand count.");
-                }
-
-                for (int i = 0; i < numOperands; ++i) {
-                    if (ip + 1 + sizeof(int) > header.codeSize) {
-                         throw std::runtime_error("Unexpected end of code segment while reading operand " + std::to_string(i+1) + " for opcode 0x" + std::to_string(static_cast<int>(opcode)) + " at offset " + std::to_string(instructionStartIp));
-                    }
-                    OperandType opType = static_cast<OperandType>(codeSegment[ip++]);
-                    int opValue = *reinterpret_cast<const int*>(&codeSegment[ip]);
-                    ip += sizeof(int);
-                    std::cout << " " << formatOperand(opType, opValue);
+                std::cout << std::setw(8) << std::left << "MNI" << std::right << " " << mniFunctionName;
+                for (const auto& opPair : currentOperands) {
+                    std::cout << " " << formatOperand(opPair.first, opPair.second);
                 }
                 std::cout << std::endl;
-
+            } else if (opcodeToString.count(opcode)) {
+                std::cout << std::setw(8) << std::left << opcodeToString.at(opcode) << std::right;
+                for (const auto& opPair : currentOperands) {
+                    std::cout << " " << formatOperand(opPair.first, opPair.second);
+                }
+                 std::cout << std::endl;
             } else {
-                // Handle unknown opcodes
-                std::cout << "Unknown Opcode (0x" << std::hex << static_cast<int>(opcode) << std::dec << ")" << std::endl;
-                // Attempt to recover or stop? For now, stop.
-                throw std::runtime_error("Encountered unknown opcode during decoding.");
+                 // Should have been caught earlier, but as a fallback
+                 std::cout << "Unknown Opcode (0x" << std::hex << static_cast<int>(opcode) << std::dec << ")" << std::endl;
             }
+
+            ip = instructionEndIp; // Advance main IP to the end of the processed instruction
+
         }
-        std::cout << "--------------" << std::endl << std::endl;
+        std::cout << "--------|--------------|--------------------------------" << std::endl << std::endl;
 
 
-        // 3. Decode Data Segment
+        // 3. Decode Data Segment with DB Reconstruction
         std::cout << "--- Data Segment (Size: " << header.dataSize << ") ---" << std::endl;
         std::vector<char> dataSegment(header.dataSize);
+        std::vector<bool> dataProcessed(header.dataSize, false); // Track processed bytes
+
          if (header.dataSize > 0) {
             // Read directly from the input file stream 'in'
             if (!in.read(dataSegment.data(), header.dataSize)) {
                  throw std::runtime_error("Failed to read data segment.");
             }
 
-            // Print data segment (e.g., hex dump)
-            const int bytesPerRow = 16;
-            for (uint32_t i = 0; i < header.dataSize; ++i) {
-                if (i % bytesPerRow == 0) {
-                    if (i > 0) std::cout << std::endl; // Newline for previous row
-                    std::cout << std::setw(4) << std::setfill('0') << std::hex << i << std::dec << ": ";
+            for (uint32_t i = 0; i < header.dataSize; /* increment handled inside */ ) {
+                if (dataProcessed[i]) {
+                    i++;
+                    continue;
                 }
-                std::cout << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(static_cast<unsigned char>(dataSegment[i])) << std::dec << " ";
+
+                bool isReferenced = referencedDataOffsets.count(i);
+                std::string currentString;
+                bool isString = false;
+                uint32_t stringEnd = i;
+
+                // If referenced, try to interpret as a null-terminated string
+                if (isReferenced) {
+                    uint32_t k = i;
+                    bool possibleString = true;
+                    while (k < header.dataSize) {
+                        char c = dataSegment[k];
+                        if (c == '\0') { // Found null terminator
+                            stringEnd = k;
+                            isString = possibleString;
+                            break;
+                        }
+                        // Allow printable ASCII, newline, tab
+                        if (!std::isprint(static_cast<unsigned char>(c)) && c != '\n' && c != '\t') {
+                            possibleString = false;
+                            // Don't break immediately, find the null terminator anyway if it exists soon
+                        }
+                        currentString += c;
+                        k++;
+                    }
+                     // If loop finished without null terminator, it's not a string ending here
+                    if (k == header.dataSize && dataSegment[k-1] != '\0') {
+                        isString = false;
+                    }
+                }
+
+                // Output based on findings
+                if (isString) {
+                    std::cout << "; Referenced Data (String)" << std::endl;
+                    std::cout << "DB $" << i << " \"" << escapeString(currentString) << "\"" << std::endl;
+                    // Mark bytes as processed
+                    for (uint32_t p = i; p <= stringEnd; ++p) {
+                        dataProcessed[p] = true;
+                    }
+                    i = stringEnd + 1; // Move past the null terminator
+                } else {
+                    // Output single byte as DB 0xHH
+                    if (isReferenced) {
+                         std::cout << "; Referenced Data (Byte)" << std::endl;
+                    } else {
+                         std::cout << "; Unreferenced Data (Byte)" << std::endl;
+                    }
+                    std::cout << "DB $" << i << " 0x"
+                              << std::setw(2) << std::setfill('0') << std::hex
+                              << static_cast<int>(static_cast<unsigned char>(dataSegment[i]))
+                              << std::dec << std::endl;
+                    dataProcessed[i] = true;
+                    i++; // Move to the next byte
+                }
             }
-            std::cout << std::endl;
         } else {
              std::cout << "(Empty)" << std::endl;
         }
