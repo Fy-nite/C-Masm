@@ -232,6 +232,29 @@ LBL name
 Defines a label that can be jumped to.
 Example: `LBL loop`
 
+## Preprocessor Directives
+
+Preprocessor directives are processed before the main compilation phase. They are typically used for including files or defining constants.
+
+### #include
+
+```
+#include "path/to/file.masm"
+#include "library.module.function"
+```
+
+The `#include` directive instructs the compiler to insert the content of another file into the current file at the location of the directive. This is useful for organizing code into reusable modules or using standard libraries.
+
+**Path Resolution:**
+
+1.  **Local Files:** If the path is enclosed in quotes and contains directory separators (`/` or `\`), it's treated as a relative path from the directory of the current source file.
+    *   Example: `#include "utils/math.mas"` will look for `math.mas` inside a `utils` subdirectory relative to the current file.
+
+2.  **Standard Library Files:** If the path is enclosed in quotes and uses dot (`.`) notation without explicit directory separators, it's treated as a standard library include. The dots are replaced with the system's directory separator, and the file is searched for within a predefined standard library "root" directory. The compiler checks for both `.mas` and `.masm` extensions.
+    *   Example: `#include "stdio.print"` will search for `root/stdio/print.mas` and `root/stdio/print.masm` within the standard library location.
+
+**Supported Extensions:** The compiler typically looks for files with `.mas` or `.masm` extensions.
+
 ## Notes
 
 - Registers are referenced as R0, R1, R2, etc.

@@ -2,6 +2,8 @@
     "files.associations": {
         "unordered_map": "cpp",
         "stdexcept": "cpp",
-        "vector": "cpp"
+        "vector": "cpp",
+        "ios": "cpp",
+        "xiosbase": "cpp"
     }
 }

@@ -1,0 +1,3 @@
+lbl printf
+    out RAX $RBX
+    ret

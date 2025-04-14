@@ -1,4 +1,33 @@
 #include <iostream>
+
+// Logging utility
+enum class LogLevel { INFO, WARNING, ERROR };
+
+void log(LogLevel level, const std::string& message) {
+    switch (level) {
+        case LogLevel::INFO:
+            std::cout << "[INFO] " << message << std::endl;
+            break;
+        case LogLevel::WARNING:
+            std::cerr << "[WARNING] " << message << std::endl;
+            break;
+        case LogLevel::ERROR:
+            std::cerr << "[ERROR] " << message << std::endl;
+            break;
+    }
+}
+
+void logInfo(const std::string& message) {
+    log(LogLevel::INFO, message);
+}
+
+void logWarning(const std::string& message) {
+    log(LogLevel::WARNING, message);
+}
+
+void logError(const std::string& message) {
+    log(LogLevel::ERROR, message);
+}
 #include <fstream>
 #include <vector>
 #include <string>
@@ -34,7 +63,7 @@ void registerMNI(const std::string& module, const std::string& name, MniFunction
     if (mniRegistry.find(fullName) == mniRegistry.end()) {
         mniRegistry[fullName] = func;
      
-        std::cout << "Registered MNI function: " << fullName << std::endl;
+        logInfo("Registered MNI function: " + fullName);
     } else {
 
         std::cerr << "Warning: MNI function " << fullName << " already registered." << std::endl;
