@@ -68,7 +68,7 @@ Options:
 
     if (mode == "-c") {
         // Pass filtered args to compiler main
-        return microasm_compiler_main(argc - 1, argv + 1); // argc-1/argv+1 skips the program name
+        return microasm_compiler_main(argc - 2, argv + 2); // argc-2/argv+2 skips the program name
     } else if (mode == "-i") {
         // Pass filtered args to interpreter main
         return microasm_interpreter_main(argc - 1, argv + 1); // argc-1/argv+1 skips the program name
