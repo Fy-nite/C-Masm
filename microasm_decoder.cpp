@@ -16,7 +16,7 @@
 struct RegisterMachineState {
     std::map<std::string, int> registers; // Example register map
     std::vector<unsigned char> memory;    // Example memory
-    // ... other state like flags, stack pointer, etc.
+
 };
 
 // Define the type for MNI functions

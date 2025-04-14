@@ -319,7 +319,7 @@ public:
         } else if (toupper(operand[0]) == 'R') { // Register
             std::string regName = operand;
             std::transform(regName.begin(), regName.end(), regName.begin(), ::toupper);
-            // ... (existing regMap lookup code) ...
+    
             static const std::unordered_map<std::string, int> regMap = {
                 {"RAX", 0}, {"RBX", 1}, {"RCX", 2}, {"RDX", 3},
                 {"RSI", 4}, {"RDI", 5}, {"RBP", 6}, {"RSP", 7},
