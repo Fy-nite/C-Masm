@@ -72,3 +72,10 @@ Thumbs.db
 *.code-workspace
 .idea/
 *.sublime-*
+
+# masm build fils including binary files
+*.asm
+*.masm
+*.mas
+*.obj
+*.bin

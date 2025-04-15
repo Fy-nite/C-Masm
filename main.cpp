@@ -20,21 +20,46 @@
 #include "microasm_compiler.h"
 #include "microasm_interpreter.h"
 
-// Keep original main function signatures for direct calls (declarations are now in headers)
-// int microasm_compiler_main(int argc, char* argv[]);
-// int microasm_interpreter_main(int argc, char* argv[]);
+// Generalized function to draw an ASCII box around text
+void drawAsciiBox(const std::string& title, const std::vector<std::string>& content) {
+    size_t maxWidth = title.size();
+    for (const auto& line : content) {
+        if (line.size() > maxWidth) {
+            maxWidth = line.size();
+        }
+    }
+
+    std::string border(maxWidth + 4, '=');
+
+    std::cout << border << "\n";
+    std::cout << "= " << title << std::string(maxWidth - title.size(), ' ') << " =\n";
+    std::cout << border << "\n";
+
+    for (const auto& line : content) {
+        std::cout << "= " << line << std::string(maxWidth - line.size(), ' ') << " =\n";
+    }
+
+    std::cout << border << "\n";
+}
+
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << R"(
-Usage: program [-d|--debug] <mode|file> [args...]
-Modes:
-  -c <src> <out> Compile a .masm file into a binary
-  -i <bin> [args..] Run a binary file
-  <file.masm> [args..] Automatically compile and run the file
-Options:
-  -d, --debug   Enable debug output for compiler and/or interpreter
-)";
+        std::cerr << "Error: No mode or file specified.\n";
+        // Print usage information
+        std::vector<std::string> usageContent = {
+            "Usage: microasm [mode] [options] [file]",
+            "Modes:",
+            "  -c  Compile a .masm file to binary.",
+            "  -i  Interpret a .masm file or binary.",
+            "Options:",
+            "  -d, --debug  Enable debug mode.",
+            "Examples:",
+            "  microasm -c example.masm",
+            "  microasm -i example.masm",
+            "  microasm -i example.bin"
+        };
+        drawAsciiBox("MicroASM Usage", usageContent);
         return 1;
     }
 

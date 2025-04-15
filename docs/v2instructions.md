@@ -11,16 +11,22 @@ Currently lacks memory addressing with offsets (no mov RBX [RBX + 5] style synta
 
 ## Registers
 
-- RAX
-- RBX
-- RCX
-- RDX
-- RSI
-- RDI
-- RBP
-- RSP
-- RIP (Instruction Pointer, though you shouldn't use this besides reading it and maybe comparing it? or using it as a jump destination)
-- R0 -> 15 (General Purpose Registers, use as you wish, but be careful with RSP and RBP. allways push and pop in pairs, and allways pop in the reverse order you pushed) don't be like me and forget to pop the registers you pushed, or you'll have a bad time
+- RAX (index 0)
+- RBX (index 1)
+- RCX (index 2)
+- RDX (index 3)
+- RSI (index 4)
+- RDI (index 5)
+- RBP (index 6)   ; Stack Base Pointer
+- RSP (index 7)   ; Stack Pointer
+- R0 (index 8) through R15 (index 23) (General Purpose Registers)
+- **Note:** There is no dedicated RFLAGS register; flags are handled internally by the interpreter.
+
+Registers are mapped as follows:
+- RAX, RBX, ..., RSP: indices 0-7
+- R0-R15: indices 8-23
+
+RBP (index 6) and RSP (index 7) are used for stack frame management.
 
 ## Basic Instructions
 

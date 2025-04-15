@@ -30,7 +30,7 @@ void registerMNI(const std::string& module, const std::string& name, MniFunction
 
 class Interpreter {
 public: // Public members needed by C API or main
-    std::vector<int> registers; // Make public for direct access from C API wrapper
+    std::vector<int> registers; // [0]=RAX, [1]=RBX, ..., [6]=RBP, [7]=RSP, [8]=R0, ..., [23]=R15
     std::vector<char> ram;      // Make public for direct access from C API wrapper
 
 private: // Private members
@@ -76,6 +76,12 @@ public: // Public methods including memory access for C API
 
     // Allow C API to enable/disable debug mode if needed post-creation
     void setDebugMode(bool enabled);
+
+    // Get the current instruction pointer
+    int getIP() const { return ip; }
+
+    // Execute a single instruction (must be implemented)
+    void executeStep();
 };
 
 // Declare the standalone main function for the interpreter

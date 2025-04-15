@@ -490,18 +490,13 @@ void Interpreter::execute() {
 
                     switch (op_val.type) {
                         case OperandType::DATA_ADDRESS: {
-                            // It's a direct data address (e.g., $label)
-                            int address = getValue(op_val); // getValue calculates absolute RAM address
+                            int address = getValue(op_val);
                             out_stream << readRamString(address);
                             break;
                         }
                         case OperandType::REGISTER_AS_ADDRESS: {
-                            // It's a register holding an address (e.g., $R1)
-                            int reg_index = op_val.value; // Get the register index
-                            if (reg_index < 0 || reg_index >= registers.size()) {
-                                 throw std::runtime_error("Invalid register index for REGISTER_AS_ADDRESS: " + std::to_string(reg_index));
-                            }
-                            int address = registers[reg_index]; // Get the address FROM the register
+                            int reg_index = op_val.value;
+                            int address = registers[reg_index];
                             out_stream << readRamString(address);
                             break;
                         }
@@ -761,6 +756,12 @@ void Interpreter::execute() {
         }
     }
      if (debugMode) std::cout << "[Debug][Interpreter] Execution finished (reached end of bytecode).\n";
+}
+
+void Interpreter::executeStep() {
+    // TODO: Implement single-instruction execution logic.
+    // For now, just call execute() as a placeholder.
+    execute();
 }
 
 // --- Standalone Interpreter Main Function Definition ---
