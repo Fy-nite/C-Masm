@@ -46,7 +46,7 @@ class Compiler {
     void parseFile(const std::string& filePath);
     Opcode getOpcode(const std::string& mnemonic);
     ResolvedOperand resolveOperand(const std::string& operand, Opcode contextOpcode = (Opcode)0); // Now knows what ResolvedOperand is
-    void parseLine(const std::string& line); // Made private as it's called by parse
+    void parseLine(const std::string& line, int lineNumber); // Updated to accept lineNumber
 
 public:
     void setDebugMode(bool enabled);

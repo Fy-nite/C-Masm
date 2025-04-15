@@ -54,8 +54,7 @@ struct RegisterMachineState {
 // It takes the machine state and a vector of string arguments (registers/immediates)
 using MniFunctionType = std::function<void(RegisterMachineState&, const std::vector<std::string>&)>;
 
-// Global registry for MNI functions
-std::map<std::string, MniFunctionType> mniRegistry;
+extern std::map<std::string, MniFunctionType> mniRegistry;
 
 // Function to register MNI functions
 void registerMNI(const std::string& module, const std::string& name, MniFunctionType func) {
@@ -76,19 +75,13 @@ void exampleMathSin(RegisterMachineState& machine, const std::vector<std::string
         std::cerr << "Error: Math.sin requires 2 arguments (src, dest)." << std::endl;
         return;
     }
-    // Basic example: assumes args are register names
-    // Real implementation needs robust parsing (registers, immediates, memory addresses)
-    // and type checking/conversion.
-    // machine.registers[args[1]] = static_cast<int>(sin(machine.registers[args[0]]));
     std::cout << "Called Math.sin with args: " << args[0] << ", " << args[1] << std::endl;
 }
 
 // Function to initialize MNI functions (call this during startup)
 void initializeMNIFunctions() {
     registerMNI("Math", "sin", exampleMathSin);
-    // Register other MNI functions here...
-    // registerMNI("Memory", "allocate", ...);
-    // registerMNI("IO", "write", ...);
+
 }
 
 // Define the same binary header structure as the compiler/interpreter
@@ -238,12 +231,9 @@ std::string escapeString(const std::string& s) {
     return ss.str();
 }
 
-// Renamed decoder_main back to main
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        std::cerr << "Usage: microasm_decoder <input.bin>" << std::endl;
-        return 1;
-    }
+
+int decoder_main(int argc, char* argv[]) {
+
 
     std::string inputFile = argv[1];
     std::ifstream in(inputFile, std::ios::binary);

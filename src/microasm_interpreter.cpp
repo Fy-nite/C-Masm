@@ -16,11 +16,8 @@
 
 // Include own header FIRST
 #include "microasm_interpreter.h"
-// Other necessary headers (already included via microasm_interpreter.h)
-// #include "operand_types.h"
-// #include "common_defs.h"
 
-// Define the global MNI registry (no extern)
+// Global registry for MNI functions (define only in ONE .cpp file)
 std::map<std::string, MniFunctionType> mniRegistry;
 
 // Define the MNI registration function
@@ -342,6 +339,7 @@ void Interpreter::execute() {
                 case LEAVE: std::cout << "LEAVE"; break; case COPY: std::cout << "COPY"; break;
                 case FILL: std::cout << "FILL"; break; case CMP_MEM: std::cout << "CMP_MEM"; break;
                 case MNI: std::cout << "MNI"; break;
+                case IN: std::cout << "IN"; break;
                 default: std::cout << "???"; break;
              }
              std::cout << ")\n";
@@ -482,8 +480,11 @@ void Interpreter::execute() {
 
                 // I/O Operations
                 case OUT: {
-                    BytecodeOperand op_port = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Port): " << formatOperandDebug(op_port) << "\n";
-                    BytecodeOperand op_val = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op2(Val ): " << formatOperandDebug(op_val) << "\n";
+                    BytecodeOperand op_port = nextRawOperand(); 
+                    if (debugMode) std::cout << "[Debug][Interpreter]   Op1(Port): " << formatOperandDebug(op_port) << "\n";
+                    BytecodeOperand op_val = nextRawOperand(); 
+                    if (debugMode) std::cout << "[Debug][Interpreter]   Op2(Val ): " << formatOperandDebug(op_val) << "\n";
+
                     int port = getValue(op_port); // Port can be immediate or register
                     std::ostream& out_stream = (port == 2) ? std::cerr : std::cout;
                     if (port != 1 && port != 2) throw std::runtime_error("Invalid port for OUT: " + std::to_string(port));
@@ -496,25 +497,26 @@ void Interpreter::execute() {
                         }
                         case OperandType::REGISTER_AS_ADDRESS: {
                             int reg_index = op_val.value;
+                            if (reg_index < 0 || reg_index >= registers.size()) {
+                                throw std::runtime_error("Invalid register index for REGISTER_AS_ADDRESS: " + std::to_string(reg_index));
+                            }
                             int address = registers[reg_index];
                             out_stream << readRamString(address);
                             break;
                         }
                         case OperandType::REGISTER: {
-                            // It's a register holding an integer value (e.g., R1)
                             int reg_val = registers[getRegisterIndex(op_val)];
                             out_stream << reg_val;
                             break;
                         }
                         case OperandType::IMMEDIATE: {
-                            // It's an immediate integer value (e.g., 123)
                             out_stream << op_val.value;
                             break;
                         }
                         default:
                             throw std::runtime_error("Unsupported operand type for OUT value: " + std::to_string(static_cast<int>(op_val.type)));
                     }
-                    break; // End of case OUT
+                    break;
                 }
                  case COUT: {
                     BytecodeOperand op_port = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Port): " << formatOperandDebug(op_port) << "\n";
@@ -551,6 +553,16 @@ void Interpreter::execute() {
                     int addr = getValue(op_addr);
                     out_stream << readRamChar(addr); // Read single char
                     // No automatic newline for OUTCHAR
+                    break;
+                }
+                case IN: {
+                    BytecodeOperand op_dest = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Dest): " << formatOperandDebug(op_dest) << "\n";
+                    int destAddr = getValue(op_dest);
+                    std::string input;
+                    std::getline(std::cin, input);
+                    // Write input and null terminator to memory
+                    std::copy(input.begin(), input.end(), ram.begin() + destAddr);
+                    ram[destAddr + input.size()] = '\0';
                     break;
                 }
 

@@ -1,3 +1,6 @@
 lbl printf
     out RAX $RBX
     ret
+lbl printc
+    cout RAX RBX
+    ret

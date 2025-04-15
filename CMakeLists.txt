@@ -9,9 +9,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Add source files
 set(SOURCES
-        microasm_compiler.cpp
-        microasm_interpreter.cpp
-        microasm_capi.cpp
+        src/microasm_compiler.cpp
+        src/microasm_interpreter.cpp
+        src/microasm_decoder.cpp
+        src/microasm_capi.cpp
         
 )
 
@@ -24,7 +25,7 @@ add_library(microasm_shared SHARED ${SOURCES})
 set_target_properties(microasm_shared PROPERTIES OUTPUT_NAME microasm)
 
 # Create the main executable
-add_executable(masm main.cpp)
+add_executable(masm src/main.cpp)
 target_link_libraries(masm microasm_static)
 
 # Install targets

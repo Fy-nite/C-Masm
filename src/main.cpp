@@ -15,7 +15,7 @@
 #else
     #error "Neither <filesystem> nor <experimental/filesystem> is available."
 #endif
-
+extern int decoder_main(int argc, char* argv[]); // Forward declaration for decoder_main
 // Include the NEW header files
 #include "microasm_compiler.h"
 #include "microasm_interpreter.h"
@@ -52,6 +52,7 @@ int main(int argc, char* argv[]) {
             "Modes:",
             "  -c  Compile a .masm file to binary.",
             "  -i  Interpret a .masm file or binary.",
+            "  -u  Decode/disassemble a binary file.", // <-- Add this line
             "Options:",
             "  -d, --debug  Enable debug mode.",
             "Examples:",
@@ -97,7 +98,16 @@ int main(int argc, char* argv[]) {
     } else if (mode == "-i") {
         // Pass filtered args to interpreter main
         return microasm_interpreter_main(argc - 1, argv + 1); // argc-1/argv+1 skips the program name
-    } else if (fs::path(mode).extension() == ".masm") {
+    } else if (mode == "-u") {
+        printf("Decoder mode selected.\n");
+        // Pass filtered args to decoder main
+        for (int i = 0; i < argc; ++i) {
+            std::cout << "Arg " << i << ": " << argv[i] << "\n";
+        }
+        return decoder_main(argc, argv + 1); // Call the decoder main function
+    }
+
+    else if (fs::path(mode).extension() == ".masm") {
         // Compile and run the .masm file directly using classes
         std::string sourceFile = mode;
         fs::path inputPath = fs::absolute(sourceFile);

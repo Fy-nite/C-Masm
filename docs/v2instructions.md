@@ -193,6 +193,15 @@ OUTCHAR port address
 Outputs a single character from memory at the specified address to the specified port.
 Example: `OUTCHAR 1 R1` - Outputs a character from the address in R1 to stdout.
 
+### IN (Input from stdin)
+
+```
+IN $address
+```
+
+Reads a line from stdin and stores it as a null-terminated string at the specified memory address.
+Example: `IN $1000` - Reads input and stores it at address 1000.
+
 ## Program Control
 
 ### HLT (Halt)

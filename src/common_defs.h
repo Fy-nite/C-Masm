@@ -54,7 +54,8 @@ enum Opcode {
     // Module Native Interface call
     MNI,
     // Pseudo-instructions (handled during compilation, not runtime)
-    INCLUDE = 0xF2 // Placeholder for include directive logic (handled pre-compilation)
+    INCLUDE = 0xF2, // Placeholder for include directive logic (handled pre-compilation)
+    IN
 };
 
 #endif // COMMON_DEFS_H
