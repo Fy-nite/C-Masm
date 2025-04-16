@@ -1,7 +1,9 @@
-#include "stdio.print"
+lbl cheese
+    db $cheese "cheese"
+    out 1 $cheese
+    ret
 lbl main
-    mov RAX 1
-    mov RBX 100
-    DB $100 "Hello World!\n"
-    call #printf
-hlt
+    mov R1 42
+    add R1 8
+    call #cheese
+    hlt

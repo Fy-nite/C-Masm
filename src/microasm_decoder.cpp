@@ -1,90 +1,40 @@
 #include <iostream>
-
-// Logging utility
-enum class LogLevel { INFO, WARNING, ERROR };
-
-void log(LogLevel level, const std::string& message) {
-    switch (level) {
-        case LogLevel::INFO:
-            std::cout << "[INFO] " << message << std::endl;
-            break;
-        case LogLevel::WARNING:
-            std::cerr << "[WARNING] " << message << std::endl;
-            break;
-        case LogLevel::ERROR:
-            std::cerr << "[ERROR] " << message << std::endl;
-            break;
-    }
-}
-
-void logInfo(const std::string& message) {
-    log(LogLevel::INFO, message);
-}
-
-void logWarning(const std::string& message) {
-    log(LogLevel::WARNING, message);
-}
-
-void logError(const std::string& message) {
-    log(LogLevel::ERROR, message);
-}
 #include <fstream>
 #include <vector>
 #include <string>
-#include <stdexcept>
-#include <cstdint>
-#include <iomanip> // For std::hex, std::setw, std::setfill
+#include <iomanip>
 #include <unordered_map>
-#include "operand_types.h" // Include the shared operand type definitions
+#include <set>
 #include <sstream>
-#include <map>
-#include <functional> // Required for std::function
-#include <set>     // For storing referenced data offsets
-#include <cctype>  // For isprint
+#include <cstdint>
+#include <cctype>
 
-// Placeholder for the machine state (registers, memory, etc.)
-// In a real implementation, this would be a class or struct
-struct RegisterMachineState {
-    std::map<std::string, int> registers; // Example register map
-    std::vector<unsigned char> memory;    // Example memory
-
+// --- Shared enums/types (should match interpreter/compiler) ---
+enum OperandType {
+    NONE = 0x00,
+    REGISTER = 0x01,
+    IMMEDIATE = 0x02,
+    LABEL_ADDRESS = 0x03,
+    DATA_ADDRESS = 0x04,
+    REGISTER_AS_ADDRESS = 0x05
 };
 
-// Define the type for MNI functions
-// It takes the machine state and a vector of string arguments (registers/immediates)
-using MniFunctionType = std::function<void(RegisterMachineState&, const std::vector<std::string>&)>;
+enum Opcode {
+    MOV = 0x01, ADD, SUB, MUL, DIV, INC,
+    JMP, CMP, JE, JL, CALL, RET,
+    PUSH, POP,
+    OUT, COUT, OUTSTR, OUTCHAR,
+    HLT, ARGC, GETARG,
+    DB, LBL,
+    AND, OR, XOR, NOT, SHL, SHR,
+    MOVADDR, MOVTO,
+    JNE, JG, JLE, JGE,
+    ENTER, LEAVE,
+    COPY, FILL, CMP_MEM,
+    MNI,
+    IN
+};
 
-extern std::map<std::string, MniFunctionType> mniRegistry;
-
-// Function to register MNI functions
-void registerMNI(const std::string& module, const std::string& name, MniFunctionType func) {
-    std::string fullName = module + "." + name;
-    if (mniRegistry.find(fullName) == mniRegistry.end()) {
-        mniRegistry[fullName] = func;
-     
-        logInfo("Registered MNI function: " + fullName);
-    } else {
-
-        std::cerr << "Warning: MNI function " << fullName << " already registered." << std::endl;
-    }
-}
-
-// Example MNI function implementation (replace with actual logic)
-void exampleMathSin(RegisterMachineState& machine, const std::vector<std::string>& args) {
-    if (args.size() != 2) {
-        std::cerr << "Error: Math.sin requires 2 arguments (src, dest)." << std::endl;
-        return;
-    }
-    std::cout << "Called Math.sin with args: " << args[0] << ", " << args[1] << std::endl;
-}
-
-// Function to initialize MNI functions (call this during startup)
-void initializeMNIFunctions() {
-    registerMNI("Math", "sin", exampleMathSin);
-
-}
-
-// Define the same binary header structure as the compiler/interpreter
 struct BinaryHeader {
     uint32_t magic = 0;
     uint16_t version = 0;
@@ -94,36 +44,6 @@ struct BinaryHeader {
     uint32_t entryPoint = 0;
 };
 
-// Use the same Opcode enum as the compiler/interpreter - Added MNI
-enum Opcode {
-    // Basic
-    MOV = 0x01, ADD, SUB, MUL, DIV, INC,
-    // Flow Control
-    JMP, CMP, JE, JL, CALL, RET,
-    // Stack
-    PUSH, POP,
-    // I/O
-    OUT, COUT, OUTSTR, OUTCHAR,
-    // Program Control
-    HLT, ARGC, GETARG,
-    // Data Definition (Not present in code segment)
-    DB,
-    // Labels (Not present in code segment)
-    LBL,
-    // Bitwise
-    AND, OR, XOR, NOT, SHL, SHR,
-    // Memory Addressing
-    MOVADDR, MOVTO,
-    // Additional Flow Control
-    JNE, JG, JLE, JGE,
-    // Stack Frame
-    ENTER, LEAVE,
-    // String/Memory Ops
-    COPY, FILL, CMP_MEM,
-    MNI // Added MNI Opcode
-};
-
-// Helper map to get mnemonic string from Opcode - Added MNI
 const std::unordered_map<Opcode, std::string> opcodeToString = {
     {MOV, "MOV"}, {ADD, "ADD"}, {SUB, "SUB"}, {MUL, "MUL"}, {DIV, "DIV"}, {INC, "INC"},
     {JMP, "JMP"}, {CMP, "CMP"}, {JE, "JE"}, {JL, "JL"}, {CALL, "CALL"}, {RET, "RET"},
@@ -135,25 +55,9 @@ const std::unordered_map<Opcode, std::string> opcodeToString = {
     {JNE, "JNE"}, {JG, "JG"}, {JLE, "JLE"}, {JGE, "JGE"},
     {ENTER, "ENTER"}, {LEAVE, "LEAVE"},
     {COPY, "COPY"}, {FILL, "FILL"}, {CMP_MEM, "CMP_MEM"},
-    {MNI, "MNI"} // Added MNI mapping
+    {MNI, "MNI"}, {IN, "IN"}
 };
 
-// Helper map to get the number of operands for each Opcode - MNI needs special handling
-const std::unordered_map<Opcode, int> opcodeOperandCount = {
-    {MOV, 2}, {ADD, 2}, {SUB, 2}, {MUL, 2}, {DIV, 2}, {INC, 1},
-    {JMP, 1}, {CMP, 2}, {JE, 1}, {JL, 1}, {CALL, 1}, {RET, 0},
-    {PUSH, 1}, {POP, 1},
-    {OUT, 2}, {COUT, 2}, {OUTSTR, 3}, {OUTCHAR, 2},
-    {HLT, 0}, {ARGC, 1}, {GETARG, 2},
-    {AND, 2}, {OR, 2}, {XOR, 2}, {NOT, 1}, {SHL, 2}, {SHR, 2},
-    {MOVADDR, 3}, {MOVTO, 3},
-    {JNE, 1}, {JG, 1}, {JLE, 1}, {JGE, 1},
-    {ENTER, 1}, {LEAVE, 0},
-    {COPY, 3}, {FILL, 3}, {CMP_MEM, 3},
-    {MNI, -1} // Indicate variable/special handling for MNI
-};
-
-// Helper map for register names (index to name)
 const std::unordered_map<int, std::string> registerIndexToString = {
     {0, "RAX"}, {1, "RBX"}, {2, "RCX"}, {3, "RDX"},
     {4, "RSI"}, {5, "RDI"}, {6, "RBP"}, {7, "RSP"},
@@ -163,290 +67,236 @@ const std::unordered_map<int, std::string> registerIndexToString = {
     {20, "R12"}, {21, "R13"}, {22, "R14"}, {23, "R15"}
 };
 
-// Helper function to read a null-terminated string from a byte vector at a given offset
-std::string readStringFromVector(const std::vector<uint8_t>& vec, uint32_t& offset) {
-    std::string str = "";
-    while (offset < vec.size()) {
-        char c = static_cast<char>(vec[offset++]);
-        if (c == '\0') {
-            break;
-        }
-        str += c;
-    }
-    // Optional: Check if null terminator was found before end of vector
-    return str;
-}
-
 std::string formatOperand(OperandType type, int value) {
     switch (type) {
-        case OperandType::REGISTER:
-            if (registerIndexToString.count(value)) {
-                return registerIndexToString.at(value);
-            } else {
-                return "R?" + std::to_string(value);
-            }
-        case OperandType::IMMEDIATE:
+        case REGISTER:
+            if (registerIndexToString.count(value)) return registerIndexToString.at(value);
+            return "R?" + std::to_string(value);
+        case REGISTER_AS_ADDRESS:
+            if (registerIndexToString.count(value)) return "$" + registerIndexToString.at(value);
+            return "$R?" + std::to_string(value);
+        case IMMEDIATE:
             return std::to_string(value);
-        case OperandType::LABEL_ADDRESS:
-            // In bytecode, it's just an address offset
-            return "#" + std::to_string(value); // Represent as #offset
-        case OperandType::DATA_ADDRESS:
-            // In bytecode, it's an offset within the data segment
-            return "$" + std::to_string(value); // Represent as $offset
-        case OperandType::NONE:
+        case LABEL_ADDRESS:
+            return "#" + std::to_string(value);
+        case DATA_ADDRESS:
+            return "$" + std::to_string(value);
+        case NONE:
             return "[NONE]";
         default:
             return "[UNKNOWN_TYPE]";
     }
 }
 
-// Helper function to format a sequence of bytes as hex
-std::string formatBytesToHex(const std::vector<uint8_t>& vec, uint32_t start, uint32_t end) {
-    std::stringstream ss;
-    for (uint32_t i = start; i < end && i < vec.size(); ++i) {
-        ss << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(vec[i]) << " ";
-    }
-    return ss.str();
-}
-
-// Helper function to escape non-printable characters for string output
 std::string escapeString(const std::string& s) {
-    std::stringstream ss;
+    std::ostringstream ss;
     for (char c : s) {
-        if (c == '\n') {
-            ss << "\\n";
-        } else if (c == '\t') {
-            ss << "\\t";
-        } else if (c == '\\') {
-            ss << "\\\\";
-        } else if (c == '"') {
-            ss << "\\\"";
-        } else if (std::isprint(static_cast<unsigned char>(c))) {
-            ss << c;
-        } else {
-            // Output non-printable chars as hex escapes
-            ss << "\\x" << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(static_cast<unsigned char>(c));
-        }
+        if (c == '\n') ss << "\\n";
+        else if (c == '\t') ss << "\\t";
+        else if (c == '\\') ss << "\\\\";
+        else if (c == '"') ss << "\\\"";
+        else if (std::isprint(static_cast<unsigned char>(c))) ss << c;
+        else ss << "\\x" << std::setw(2) << std::setfill('0') << std::hex << (int)(unsigned char)c;
     }
     return ss.str();
 }
 
+std::string readString(const std::vector<uint8_t>& vec, size_t& offset) {
+    std::string str;
+    while (offset < vec.size()) {
+        char c = static_cast<char>(vec[offset++]);
+        if (c == '\0') break;
+        str += c;
+    }
+    return str;
+}
+
+void printHexBytes(const std::vector<uint8_t>& vec, size_t start, size_t end) {
+    for (size_t i = start; i < end && i < vec.size(); ++i)
+        std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)vec[i] << " ";
+    std::cout << std::dec;
+}
+
+int getOperandCount(Opcode opcode) {
+    switch (opcode) {
+        case MOV: case ADD: case SUB: case MUL: case DIV: case CMP: case AND: case OR: case XOR: case SHL: case SHR: case MOVADDR: case MOVTO:
+        case GETARG: case COPY: case FILL: case CMP_MEM: case OUT: case COUT: case OUTCHAR:
+            return 2;
+        case OUTSTR:
+            return 3;
+        case INC: case JMP: case JE: case JL: case CALL: case PUSH: case POP: case JNE: case JG: case JLE: case JGE: case ENTER: case ARGC: case IN:
+            return 1;
+        case RET: case LEAVE: case HLT:
+            return 0;
+        case MNI:
+            return -1; // special
+        default:
+            return -2; // unknown
+    }
+}
+
+// ANSI color codes
+#define CLR_RESET   "\033[0m"
+#define CLR_OPCODE  "\033[1;36m"
+#define CLR_OFFSET  "\033[1;33m"
+#define CLR_OPERAND "\033[1;32m"
+#define CLR_HEX     "\033[1;35m"
+#define CLR_COMMENT "\033[1;90m"
+#define CLR_ERROR   "\033[1;31m"
 
 int decoder_main(int argc, char* argv[]) {
-
-
-    std::string inputFile = argv[1];
-    std::ifstream in(inputFile, std::ios::binary);
+    if (argc < 2) {
+        std::cerr << "Usage: masmd <file.bin>" << std::endl;
+        return 1;
+    }
+    std::ifstream in(argv[1], std::ios::binary);
     if (!in) {
-        std::cerr << "Error: Cannot open input file: " << inputFile << std::endl;
+        std::cerr << "Error: Cannot open input file: " << argv[1] << std::endl;
         return 1;
     }
 
     try {
-        // 1. Read and print header
         BinaryHeader header;
-        if (!in.read(reinterpret_cast<char*>(&header), sizeof(header))) {
+        if (!in.read(reinterpret_cast<char*>(&header), sizeof(header)))
             throw std::runtime_error("Failed to read header.");
-        }
 
         std::cout << "--- Header ---" << std::endl;
         std::cout << "Magic:      0x" << std::hex << header.magic << std::dec
-                  << " ('" << static_cast<char>(header.magic & 0xFF)
-                  << static_cast<char>((header.magic >> 8) & 0xFF)
-                  << static_cast<char>((header.magic >> 16) & 0xFF)
-                  << static_cast<char>((header.magic >> 24) & 0xFF) << "')" << std::endl;
+                  << " ('" << (char)(header.magic & 0xFF)
+                  << (char)((header.magic >> 8) & 0xFF)
+                  << (char)((header.magic >> 16) & 0xFF)
+                  << (char)((header.magic >> 24) & 0xFF) << "')" << std::endl;
         std::cout << "Version:    " << header.version << std::endl;
         std::cout << "Code Size:  " << header.codeSize << " bytes" << std::endl;
         std::cout << "Data Size:  " << header.dataSize << " bytes" << std::endl;
         std::cout << "Entry Point:" << header.entryPoint << " (offset)" << std::endl;
         std::cout << "--------------" << std::endl << std::endl;
 
-        // Set to store data segment offsets referenced by the code
-        std::set<uint32_t> referencedDataOffsets;
+        std::vector<uint8_t> code(header.codeSize);
+        if (header.codeSize > 0 && !in.read(reinterpret_cast<char*>(code.data()), header.codeSize))
+            throw std::runtime_error("Failed to read code segment.");
 
-        // 2. Decode Code Segment
+        std::set<uint32_t> referencedDataOffsets;
         std::cout << "--- Code Segment (Size: " << header.codeSize << ") ---" << std::endl;
         std::cout << "Offset  | Bytes        | Disassembly" << std::endl;
         std::cout << "--------|--------------|--------------------------------" << std::endl;
-        std::vector<uint8_t> codeSegment(header.codeSize);
-        if (header.codeSize > 0) {
-            if (!in.read(reinterpret_cast<char*>(codeSegment.data()), header.codeSize)) {
-                throw std::runtime_error("Failed to read code segment.");
-            }
-        }
 
-        uint32_t ip = 0;
-        while (ip < header.codeSize) {
-            uint32_t instructionStartIp = ip;
-            Opcode opcode = static_cast<Opcode>(codeSegment[ip++]);
+        size_t ip = 0;
+        while (ip < code.size()) {
+            size_t startIp = ip;
+            uint8_t opcodeByte = code[ip++];
+            Opcode opcode = static_cast<Opcode>(opcodeByte);
 
-            // Store operands temporarily to calculate instruction size *before* printing hex bytes
-            std::vector<std::pair<OperandType, int>> currentOperands;
-            std::string mniFunctionName = ""; // For MNI
-            uint32_t tempIp = ip; // Use a temporary IP to parse operands without advancing the main ip
+            std::ostringstream diss;
+            diss << CLR_OPCODE << std::setw(8) << std::left
+                 << (opcodeToString.count(opcode) ? opcodeToString.at(opcode) : ("0x" + std::to_string(opcodeByte)))
+                 << CLR_RESET;
 
-            try { // Inner try-catch for operand parsing to determine instruction size
+            std::vector<std::pair<OperandType, int>> operands;
+            std::string mniFunc;
+            size_t tempIp = ip;
+            bool unknown = false;
+
+            try {
+                int opCount = getOperandCount(opcode);
                 if (opcode == MNI) {
-                    mniFunctionName = readStringFromVector(codeSegment, tempIp);
-                    while (tempIp < header.codeSize) {
-                        if (tempIp + 1 + sizeof(int) > header.codeSize) {
-                             throw std::runtime_error("Unexpected end of code segment while reading MNI operand/marker");
-                        }
-                        OperandType opType = static_cast<OperandType>(codeSegment[tempIp]);
-                        int opValue = *reinterpret_cast<const int*>(&codeSegment[tempIp + 1]);
-
-                        if (opType == OperandType::NONE) {
-                            tempIp += 1 + sizeof(int); // Consume marker
-                            break; // End of MNI arguments
-                        }
-                        currentOperands.push_back({opType, opValue});
-                        tempIp += 1 + sizeof(int); // Consume operand
-                        if (opType == OperandType::DATA_ADDRESS) {
-                            referencedDataOffsets.insert(static_cast<uint32_t>(opValue));
-                        }
+                    mniFunc = readString(code, tempIp);
+                    while (tempIp + 1 + 4 <= code.size()) {
+                        OperandType t = static_cast<OperandType>(code[tempIp++]);
+                        int v = *reinterpret_cast<const int*>(&code[tempIp]);
+                        tempIp += 4;
+                        if (t == NONE) break;
+                        operands.emplace_back(t, v);
+                        if (t == DATA_ADDRESS) referencedDataOffsets.insert(v);
                     }
-                } else if (opcodeOperandCount.count(opcode)) {
-                    int numOperands = opcodeOperandCount.at(opcode);
-                    for (int i = 0; i < numOperands; ++i) {
-                        if (tempIp + 1 + sizeof(int) > header.codeSize) {
-                            throw std::runtime_error("Unexpected end of code segment while reading operand " + std::to_string(i+1));
-                        }
-                        OperandType opType = static_cast<OperandType>(codeSegment[tempIp]);
-                        int opValue = *reinterpret_cast<const int*>(&codeSegment[tempIp + 1]);
-                        currentOperands.push_back({opType, opValue});
-                        tempIp += 1 + sizeof(int); // Consume operand
-                        if (opType == OperandType::DATA_ADDRESS) {
-                            referencedDataOffsets.insert(static_cast<uint32_t>(opValue));
-                        }
+                } else if (opCount >= 0) {
+                    for (int i = 0; i < opCount; ++i) {
+                        if (tempIp + 1 + 4 > code.size())
+                            throw std::runtime_error("Unexpected end of code segment while reading operand");
+                        OperandType t = static_cast<OperandType>(code[tempIp++]);
+                        int v = *reinterpret_cast<const int*>(&code[tempIp]);
+                        tempIp += 4;
+                        operands.emplace_back(t, v);
+                        if (t == DATA_ADDRESS) referencedDataOffsets.insert(v);
                     }
                 } else if (!opcodeToString.count(opcode)) {
-                     throw std::runtime_error("Unknown opcode encountered."); // Handle unknown opcode early
+                    throw std::runtime_error("Unknown opcode encountered.");
                 }
-                // If opcode is known but count is missing (shouldn't happen with current setup)
-                // else { throw std::runtime_error("Missing operand count for known opcode."); }
-
-            } catch (const std::exception& operandEx) {
-                 // Can't determine full instruction size if operands are bad
-                 std::cerr << "Error parsing operands at offset " << instructionStartIp << ": " << operandEx.what() << std::endl;
-                 tempIp = ip; // Reset tempIp, print only opcode byte maybe?
-                 // Or rethrow / break loop
-                 throw;
+            } catch (...) {
+                unknown = true;
             }
 
-            uint32_t instructionEndIp = tempIp; // End of the current instruction bytes
+            size_t endIp = tempIp;
+            std::cout << CLR_OFFSET << std::setw(7) << std::setfill('0') << startIp << CLR_RESET << " | ";
+            std::cout << CLR_HEX;
+            printHexBytes(code, startIp, endIp);
+            std::cout << CLR_RESET << std::setw(12 - 3 * (endIp - startIp)) << " | ";
 
-            // Print Offset
-            std::cout << std::setw(7) << std::setfill('0') << instructionStartIp << " | ";
-            // Print Hex Bytes
-            std::string hexBytes = formatBytesToHex(codeSegment, instructionStartIp, instructionEndIp);
-            std::cout << std::setw(12) << std::left << hexBytes << " | ";
-            std::cout << std::setfill(' '); // Reset fill character
-
-            // Print Disassembly
+            // Colorize disassembly
             if (opcode == MNI) {
-                std::cout << std::setw(8) << std::left << "MNI" << std::right << " " << mniFunctionName;
-                for (const auto& opPair : currentOperands) {
-                    std::cout << " " << formatOperand(opPair.first, opPair.second);
-                }
+                std::cout << CLR_OPCODE << "MNI" << CLR_RESET << " " << CLR_OPERAND << mniFunc << CLR_RESET;
+                for (auto& op : operands)
+                    std::cout << " " << CLR_OPERAND << formatOperand(op.first, op.second) << CLR_RESET;
                 std::cout << std::endl;
             } else if (opcodeToString.count(opcode)) {
-                std::cout << std::setw(8) << std::left << opcodeToString.at(opcode) << std::right;
-                for (const auto& opPair : currentOperands) {
-                    std::cout << " " << formatOperand(opPair.first, opPair.second);
-                }
-                 std::cout << std::endl;
+                std::cout << CLR_OPCODE << opcodeToString.at(opcode) << CLR_RESET;
+                for (auto& op : operands)
+                    std::cout << " " << CLR_OPERAND << formatOperand(op.first, op.second) << CLR_RESET;
+                std::cout << std::endl;
             } else {
-                 // Should have been caught earlier, but as a fallback
-                 std::cout << "Unknown Opcode (0x" << std::hex << static_cast<int>(opcode) << std::dec << ")" << std::endl;
+                std::cout << CLR_ERROR << "Unknown Opcode (0x" << std::hex << (int)opcodeByte << std::dec << ")" << CLR_RESET << std::endl;
+                unknown = true;
             }
-
-            ip = instructionEndIp; // Advance main IP to the end of the processed instruction
-
+            if (unknown) break;
+            ip = endIp;
         }
         std::cout << "--------|--------------|--------------------------------" << std::endl << std::endl;
 
-
-        // 3. Decode Data Segment with DB Reconstruction
+        // Data segment (colorize comments)
         std::cout << "--- Data Segment (Size: " << header.dataSize << ") ---" << std::endl;
-        std::vector<char> dataSegment(header.dataSize);
-        std::vector<bool> dataProcessed(header.dataSize, false); // Track processed bytes
+        std::vector<char> data(header.dataSize);
+        std::vector<bool> processed(header.dataSize, false);
+        if (header.dataSize > 0 && !in.read(data.data(), header.dataSize))
+            throw std::runtime_error("Failed to read data segment.");
 
-         if (header.dataSize > 0) {
-            // Read directly from the input file stream 'in'
-            if (!in.read(dataSegment.data(), header.dataSize)) {
-                 throw std::runtime_error("Failed to read data segment.");
+        for (uint32_t i = 0; i < header.dataSize;) {
+            if (processed[i]) { ++i; continue; }
+            bool isRef = referencedDataOffsets.count(i);
+            std::string s;
+            bool isStr = false;
+            uint32_t end = i;
+            if (isRef) {
+                uint32_t k = i;
+                bool possible = true;
+                while (k < header.dataSize) {
+                    char c = data[k];
+                    if (c == '\0') { end = k; isStr = possible; break; }
+                    if (!std::isprint((unsigned char)c) && c != '\n' && c != '\t') possible = false;
+                    s += c; ++k;
+                }
+                if (k == header.dataSize && data[k-1] != '\0') isStr = false;
             }
-
-            for (uint32_t i = 0; i < header.dataSize; /* increment handled inside */ ) {
-                if (dataProcessed[i]) {
-                    i++;
-                    continue;
-                }
-
-                bool isReferenced = referencedDataOffsets.count(i);
-                std::string currentString;
-                bool isString = false;
-                uint32_t stringEnd = i;
-
-                // If referenced, try to interpret as a null-terminated string
-                if (isReferenced) {
-                    uint32_t k = i;
-                    bool possibleString = true;
-                    while (k < header.dataSize) {
-                        char c = dataSegment[k];
-                        if (c == '\0') { // Found null terminator
-                            stringEnd = k;
-                            isString = possibleString;
-                            break;
-                        }
-                        // Allow printable ASCII, newline, tab
-                        if (!std::isprint(static_cast<unsigned char>(c)) && c != '\n' && c != '\t') {
-                            possibleString = false;
-                            // Don't break immediately, find the null terminator anyway if it exists soon
-                        }
-                        currentString += c;
-                        k++;
-                    }
-                     // If loop finished without null terminator, it's not a string ending here
-                    if (k == header.dataSize && dataSegment[k-1] != '\0') {
-                        isString = false;
-                    }
-                }
-
-                // Output based on findings
-                if (isString) {
-                    std::cout << "; Referenced Data (String)" << std::endl;
-                    std::cout << "DB $" << i << " \"" << escapeString(currentString) << "\"" << std::endl;
-                    // Mark bytes as processed
-                    for (uint32_t p = i; p <= stringEnd; ++p) {
-                        dataProcessed[p] = true;
-                    }
-                    i = stringEnd + 1; // Move past the null terminator
-                } else {
-                    // Output single byte as DB 0xHH
-                    if (isReferenced) {
-                         std::cout << "; Referenced Data (Byte)" << std::endl;
-                    } else {
-                         std::cout << "; Unreferenced Data (Byte)" << std::endl;
-                    }
-                    std::cout << "DB $" << i << " 0x"
-                              << std::setw(2) << std::setfill('0') << std::hex
-                              << static_cast<int>(static_cast<unsigned char>(dataSegment[i]))
-                              << std::dec << std::endl;
-                    dataProcessed[i] = true;
-                    i++; // Move to the next byte
-                }
+            if (isStr) {
+                std::cout << CLR_COMMENT << "; Referenced Data (String)" << CLR_RESET << std::endl;
+                std::cout << "DB $" << i << " \"" << escapeString(s) << "\"" << std::endl;
+                for (uint32_t p = i; p <= end; ++p) processed[p] = true;
+                i = end + 1;
+            } else {
+                if (isRef) std::cout << CLR_COMMENT << "; Referenced Data (Byte)" << CLR_RESET << std::endl;
+                else std::cout << CLR_COMMENT << "; Unreferenced Data (Byte)" << CLR_RESET << std::endl;
+                std::cout << "DB $" << i << " 0x"
+                          << std::setw(2) << std::setfill('0') << std::hex
+                          << (int)(unsigned char)data[i]
+                          << std::dec << std::endl;
+                processed[i] = true;
+                ++i;
             }
-        } else {
-             std::cout << "(Empty)" << std::endl;
         }
+        if (header.dataSize == 0) std::cout << "(Empty)" << std::endl;
         std::cout << "--------------" << std::endl;
-
-
     } catch (const std::exception& e) {
-        std::cerr << "Decoding Error: " << e.what() << std::endl;
+        std::cerr << CLR_ERROR << "Decoding Error: " << e.what() << CLR_RESET << std::endl;
         return 1;
     }
-
     return 0;
 }

@@ -15,6 +15,12 @@
 #include <vector>
 #include <iomanip>
 #include <cstring>
+#ifdef _WIN32
+#include <libloaderapi.h>
+#else
+#include <limits.h> // For PATH_MAX
+#include <sys/stat.h> // For stat()
+#endif
 #ifndef _WIN32
 #include <unistd.h>
 #endif
@@ -120,8 +126,9 @@ std::string Compiler::resolveIncludePath(const std::string& includePath) {
 
     // --- Additional fallback: check next to the executable ---
     #if defined(_WIN32)
-        char exePath[MAX_PATH];
-        GetModuleFileNameA(NULL, exePath, MAX_PATH);
+        
+        char exePath[500];
+        GetModuleFileNameA(NULL, exePath, sizeof(exePath));
         fs::path exeDir = fs::path(exePath).parent_path();
     #else
         char exePath[PATH_MAX];
