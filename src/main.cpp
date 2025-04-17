@@ -98,14 +98,14 @@ int main(int argc, char* argv[]) {
     } else if (mode == "-i") {
         // Pass filtered args to interpreter main
         return microasm_interpreter_main(argc - 1, argv + 1); // argc-1/argv+1 skips the program name
-    } else if (mode == "-u") {
-        printf("Decoder mode selected.\n");
-        // Pass filtered args to decoder main
-        for (int i = 0; i < argc; ++i) {
-            std::cout << "Arg " << i << ": " << argv[i] << "\n";
-        }
-        return decoder_main(argc, argv + 1); // Call the decoder main function
-    }
+     } //else if (mode == "-u") {
+    //     printf("Decoder mode selected.\n");
+    //     // Pass filtered args to decoder main
+    //     for (int i = 0; i < argc; ++i) {
+    //         std::cout << "Arg " << i << ": " << argv[i] << "\n";
+    //     }
+    //     return decoder_main(argc, argv + 1); // Call the decoder main function
+    // }
 
     else if (fs::path(mode).extension() == ".masm") {
         // Compile and run the .masm file directly using classes

@@ -7,13 +7,12 @@ project(MicroASM_Toolchain CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Add source files
+# Add source files (EXCLUDE microasm_decoder.cpp)
 set(SOURCES
         src/microasm_compiler.cpp
         src/microasm_interpreter.cpp
-        src/microasm_decoder.cpp
         src/microasm_capi.cpp
-        
+        # src/microasm_decoder.cpp  # <-- REMOVE from library sources
 )
 
 # Create a static library
@@ -27,6 +26,14 @@ set_target_properties(microasm_shared PROPERTIES OUTPUT_NAME microasm)
 # Create the main executable
 add_executable(masm src/main.cpp)
 target_link_libraries(masm microasm_static)
+
+# Create a standalone decoder executable 
+add_executable(microasm_decoder src/microasm_decoder.cpp)
+target_link_libraries(microasm_decoder PRIVATE microasm_static raylib)
+
+# --- Raylib integration for decoder ---
+find_package(raylib REQUIRED)
+# --------------------------------------
 
 # Install targets
 install(TARGETS microasm_static microasm_shared

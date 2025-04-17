@@ -42,7 +42,7 @@
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"    // warning: implicit conversion changes signedness
-#endif 
+#endif
 
 // SDL
 #include <SDL.h>

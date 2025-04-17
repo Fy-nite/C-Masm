@@ -84,7 +84,7 @@ std::string formatOperand(OperandType type, int value) {
         case NONE:
             return "[NONE]";
         default:
-            return "[UNKNOWN_TYPE]";
+            return Color::RED + "[UNKNOWN_TYPE]" + Color::RESET;
     }
 }
 
@@ -169,7 +169,7 @@ int decoder_main(int argc, char* argv[]) {
         std::cout << "Version:    " << header.version << std::endl;
         std::cout << "Code Size:  " << header.codeSize << " bytes" << std::endl;
         std::cout << "Data Size:  " << header.dataSize << " bytes" << std::endl;
-        std::cout << "Entry Point:" << header.entryPoint << " (offset)" << std::endl;
+        std::cout << "Entry Point:" << Color::MAGENTA << header.entryPoint << Color::RESET << " (offset)" << std::endl;
         std::cout << "--------------" << std::endl << std::endl;
 
         std::vector<uint8_t> code(header.codeSize);
