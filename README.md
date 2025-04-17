@@ -1,6 +1,6 @@
-# MicroASM C++ Toolchain
+# MASM Icc
 
-This repository contains a C++ implementation of a compiler and interpreter for the MicroASM assembly language.
+The Ultimate Runtime for Micro-Assembly
 
 ## Overview
 
