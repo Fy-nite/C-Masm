@@ -1,13 +1,14 @@
 # MASM Icc
 
-The Ultimate Runtime for Micro-Assembly
+The Ultimate Offical Runtime for Micro-Assembly!
 
 ## Overview
 
 MicroASM is a custom assembly language designed for simplicity and extensibility. This toolchain provides:
 
-1.  **`microasm_compiler`**: Compiles MicroASM source code (`.masm`) into a custom binary format (`.bin`).
-2.  **`microasm_interpreter`**: Executes the compiled MicroASM binary files.
+1.  **`A Micro-Assembly compiler`**: Compiles MicroASM source code (`.masm`) into a custom binary format (`.mb`).
+2.  **`A Micro-Assembly interpreter`**: Executes the compiled MicroASM binary files.
+3.  **`A Mycro-Bytecode decoder`**: Decompile and view* Micro-Assembly code when something goes wrong.
 
 While the toolchain can be used standalone, its primary purpose is to serve as a core library for building custom MicroASM runtimes in other environments (e.g., embedding MicroASM scripting into a larger application), as described in [usage.md](usage.md).
 
