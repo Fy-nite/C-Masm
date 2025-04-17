@@ -80,3 +80,5 @@ Thumbs.db
 *.obj
 *.bin
 masm
+masm.exe
+masm.*

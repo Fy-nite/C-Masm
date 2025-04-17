@@ -5,6 +5,15 @@
 #include <sstream>   // Required by compiler/interpreter includes indirectly
 #include <fstream>   // Required by compiler/interpreter includes indirectly
 
+#define CLR_RESET   "\033[0m"
+#define CLR_ERROR   "\033[1;31m"    
+#define CLR_OPCODE  "\033[1;36m"
+#define CLR_OFFSET  "\033[1;33m"
+#define CLR_OPERAND "\033[1;32m"
+#define CLR_HEX     "\033[1;35m"
+#define CLR_COMMENT "\033[1;90m"
+#define CLR_STRING  "\033[1;34m"
+
 // Filesystem includes
 #if __has_include(<filesystem>)
     #include <filesystem>
@@ -20,7 +29,7 @@ extern int decoder_main(int argc, char* argv[]); // Forward declaration for deco
 #include "microasm_compiler.h"
 #include "microasm_interpreter.h"
 
-// Generalized function to draw an ASCII box around text
+
 void drawAsciiBox(const std::string& title, const std::vector<std::string>& content) {
     size_t maxWidth = title.size();
     for (const auto& line : content) {
@@ -29,17 +38,30 @@ void drawAsciiBox(const std::string& title, const std::vector<std::string>& cont
         }
     }
 
-    std::string border(maxWidth + 4, '=');
-
-    std::cout << border << "\n";
-    std::cout << "= " << title << std::string(maxWidth - title.size(), ' ') << " =\n";
-    std::cout << border << "\n";
-
-    for (const auto& line : content) {
-        std::cout << "= " << line << std::string(maxWidth - line.size(), ' ') << " =\n";
+    // Helper string for the horizontal bar character
+    const std::string hBar = "═";
+    std::string horizontalLine;
+    for (size_t i = 0; i < maxWidth + 2; ++i) {
+        horizontalLine += hBar;
     }
 
-    std::cout << border << "\n";
+    // Use UTF-8 strings for box characters and the constructed horizontal line
+    std::string topBorder = "\033[1;35m╔" + horizontalLine + "╗\033[0m";
+    std::string bottomBorder = "\033[1;35m╚" + horizontalLine + "╝\033[0m";
+    std::string titleBorder = "\033[1;35m║ \033[1;36m" + title + std::string(maxWidth - title.size(), ' ') + "\033[1;35m ║\033[0m";
+    std::string separator = "\033[1;35m╠" + horizontalLine + "╣\033[0m"; // Separator line
+
+    // Use std::cout instead of std::wcout
+    std::cout << topBorder << "\n";
+    std::cout << titleBorder << "\n";
+    std::cout << separator << "\n";
+
+    for (const auto& line : content) {
+        // Use std::cout and std::string
+        std::cout << "\033[1;35m║ \033[1;32m" << line << std::string(maxWidth - line.size(), ' ') << "\033[1;35m ║\033[0m" << "\n";
+    }
+
+    std::cout << bottomBorder << "\n";
 }
 
 
@@ -48,7 +70,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Error: No mode or file specified.\n";
         // Print usage information
         std::vector<std::string> usageContent = {
-            "Usage: microasm [mode] [options] [file]",
+            "Usage: masm [mode] [options] [file]",
             "Modes:",
             "  -c  Compile a .masm file to binary.",
             "  -i  Interpret a .masm file or binary.",
@@ -98,14 +120,14 @@ int main(int argc, char* argv[]) {
     } else if (mode == "-i") {
         // Pass filtered args to interpreter main
         return microasm_interpreter_main(argc - 1, argv + 1); // argc-1/argv+1 skips the program name
-     } //else if (mode == "-u") {
-    //     printf("Decoder mode selected.\n");
-    //     // Pass filtered args to decoder main
-    //     for (int i = 0; i < argc; ++i) {
-    //         std::cout << "Arg " << i << ": " << argv[i] << "\n";
-    //     }
-    //     return decoder_main(argc, argv + 1); // Call the decoder main function
-    // }
+     } else if (mode == "-u") {
+        printf("Decoder mode selected.\n");
+        // Pass filtered args to decoder main
+        for (int i = 0; i < argc; ++i) {
+            std::cout << "Arg " << i << ": " << argv[i] << "\n";
+        }
+        return decoder_main(argc, argv + 1); // Call the decoder main function
+    }
 
     else if (fs::path(mode).extension() == ".masm") {
         // Compile and run the .masm file directly using classes

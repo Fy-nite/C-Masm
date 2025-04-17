@@ -84,7 +84,7 @@ std::string formatOperand(OperandType type, int value) {
         case NONE:
             return "[NONE]";
         default:
-            return Color::RED + "[UNKNOWN_TYPE]" + Color::RESET;
+            return "\t[UNKNOWN]";
     }
 }
 
@@ -144,6 +144,7 @@ int getOperandCount(Opcode opcode) {
 #define CLR_COMMENT "\033[1;90m"
 #define CLR_ERROR   "\033[1;31m"
 
+// Always define as decoder_main when included in the main project
 int decoder_main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: masmd <file.bin>" << std::endl;
