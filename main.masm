@@ -1,9 +1,0 @@
-lbl cheese
-    db $cheese "cheese"
-    out 1 $cheese
-    ret
-lbl main
-    mov R1 42
-    add R1 8
-    call #cheese
-    hlt

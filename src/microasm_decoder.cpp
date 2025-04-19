@@ -20,7 +20,7 @@ enum OperandType {
 };
 
 enum Opcode {
-    MOV = 0x01, ADD, SUB, MUL, DIV, INC,
+    MOV = 0x00, ADD, SUB, MUL, DIV, INC,
     JMP, CMP, JE, JL, CALL, RET,
     PUSH, POP,
     OUT, COUT, OUTSTR, OUTCHAR,
@@ -35,6 +35,7 @@ enum Opcode {
     IN
 };
 
+#pragma pack(push, 1)
 struct BinaryHeader {
     uint32_t magic = 0;
     uint16_t version = 0;
@@ -43,6 +44,7 @@ struct BinaryHeader {
     uint32_t dataSize = 0;
     uint32_t entryPoint = 0;
 };
+#pragma pack(pop)
 
 const std::unordered_map<Opcode, std::string> opcodeToString = {
     {MOV, "MOV"}, {ADD, "ADD"}, {SUB, "SUB"}, {MUL, "MUL"}, {DIV, "DIV"}, {INC, "INC"},

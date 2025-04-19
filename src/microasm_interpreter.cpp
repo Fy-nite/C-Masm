@@ -480,15 +480,11 @@ void Interpreter::execute() {
 
                 // I/O Operations
                 case OUT: {
-                    BytecodeOperand op_port = nextRawOperand(); 
-                    if (debugMode) std::cout << "[Debug][Interpreter]   Op1(Port): " << formatOperandDebug(op_port) << "\n";
-                    BytecodeOperand op_val = nextRawOperand(); 
-                    if (debugMode) std::cout << "[Debug][Interpreter]   Op2(Val ): " << formatOperandDebug(op_val) << "\n";
-
-                    int port = getValue(op_port); // Port can be immediate or register
+                    BytecodeOperand op_port = nextRawOperand();
+                    BytecodeOperand op_val = nextRawOperand();
+                    int port = getValue(op_port);
                     std::ostream& out_stream = (port == 2) ? std::cerr : std::cout;
                     if (port != 1 && port != 2) throw std::runtime_error("Invalid port for OUT: " + std::to_string(port));
-
                     switch (op_val.type) {
                         case OperandType::DATA_ADDRESS: {
                             int address = getValue(op_val);

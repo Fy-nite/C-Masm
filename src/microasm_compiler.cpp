@@ -334,25 +334,26 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
             if (debugMode) std::cout << "[Debug][Compiler]   Parsed MNI instruction: " << instr.mniFunctionName << " with " << instr.operands.size() << " operands. New address: " << currentAddress << "\n";
         } else {
             Instruction instr;
-            try {
-                 instr.opcode = getOpcode(upperToken);
-            } catch (const std::out_of_range& oor) {
-                 throw std::runtime_error("Unknown instruction: " + token);
-            }
+            instr.opcode = getOpcode(upperToken);
             std::string operand;
             while (stream >> operand) {
+                // -- immediate detection for MOV: if token is a bare integer, prefix with '$'
+                if (instr.opcode == MOV
+                    && !operand.empty()
+                    && (std::isdigit(operand[0]) 
+                        || ((operand[0]=='-'||operand[0]=='+') 
+                            && operand.size()>1 
+                            && std::isdigit(operand[1])))) 
+                {
+                    operand = "$" + operand;
+                }
                 instr.operands.push_back(operand);
             }
-
-            // *** Refinement for MOV: Determine if source is immediate ***
-            // This simple compiler doesn't explicitly track types in bytecode.
-            // The interpreter will have to infer based on the resolved value,
-            // or we'd need a more complex bytecode format.
-            // For now, resolveOperand handles immediate detection.
-
             instructions.push_back(instr);
-            currentAddress += calculateInstructionSize(instr); // Use helper for size calculation
-            if (debugMode) std::cout << "[Debug][Compiler]   Parsed instruction: " << upperToken << " with " << instr.operands.size() << " operands. New address: " << currentAddress << "\n";
+            currentAddress += calculateInstructionSize(instr);
+            if (debugMode) std::cout << "[Debug][Compiler]   Parsed instruction: " << upperToken
+                                     << " with " << instr.operands.size() << " operands. New address: "
+                                     << currentAddress << "\n";
         }
     } catch (const std::exception& e) {
         throw std::runtime_error("Error at line " + std::to_string(lineNumber) + ", column " + std::to_string(columnNumber) + ": " + e.what());
@@ -407,6 +408,8 @@ void Compiler::compile(const std::string& outputFile) {
 
     // Prepare the header
     BinaryHeader header;
+    header.magic = 0x4D53414D; // "MASM"
+    header.version = 1;
     header.codeSize = actualCodeSize;
     header.dataSize = dataSegment.size();
     header.entryPoint = entryPointAddress; // Set the found entry point
@@ -420,7 +423,7 @@ void Compiler::compile(const std::string& outputFile) {
     for (const auto& instr : instructions) {
         if (instr.opcode == DB || instr.opcode == LBL) continue; // Skip pseudo-instructions
 
-        if (debugMode) std::cout << "[Debug][Compiler]   Offset 0x" << std::hex << std::setw(4) << std::setfill('0') << byteOffset << ": Opcode 0x" << std::setw(2) << static_cast<int>(instr.opcode) << std::dec << "\n";
+        // THIS LINE IS CRITICAL:
         out.put(static_cast<char>(instr.opcode)); // Write Opcode (1 byte)
         byteOffset += 1;
 
@@ -481,7 +484,7 @@ ResolvedOperand Compiler::resolveOperand(const std::string& operand, Opcode cont
             } else {
                 throw std::runtime_error("Undefined label: " + operand);
             }
-        } else if (operand[0] == '$') { // Data Label (e.g., $1), Register Address ($R1), or Immediate ($500)
+        } else if (operand[0] == '$') {
             if (dataLabels.count(operand)) {
                 // Data reference
                 result.type = OperandType::DATA_ADDRESS;
@@ -509,17 +512,31 @@ ResolvedOperand Compiler::resolveOperand(const std::string& operand, Opcode cont
                     throw std::runtime_error("Unknown register format for $ operand: " + operand);
                 }
             } else {
-            parse_dollar_immediate: // Label for goto
-                // Try parsing as an immediate number (e.g., $500)
-                try {
-                    long long val = std::stoll(operand.substr(1));
-                    if (val < INT_MIN || val > INT_MAX) {
-                        throw std::runtime_error("Immediate value ($) out of 32-bit range: " + operand);
+                bool isNumber = true;
+                std::string numStr = operand.substr(1);
+                for (char c : numStr) {
+                    if (!std::isdigit(c) && c != '-' && c != '+') { isNumber = false; break; }
+                }
+                if (isNumber &&
+                    (contextOpcode == OUT || contextOpcode == OUTSTR || contextOpcode == OUTCHAR || contextOpcode == COUT)) {
+                    long long val = std::stoll(numStr);
+                    if (val < 0 || val > INT_MAX) {
+                        throw std::runtime_error("DATA_ADDRESS ($<number>) out of range: " + operand);
                     }
-                    result.type = OperandType::IMMEDIATE;
+                    result.type = OperandType::DATA_ADDRESS;
                     result.value = static_cast<int>(val);
-                } catch (...) { // Catch invalid_argument, out_of_range
-                    throw std::runtime_error("Invalid immediate value or undefined data/register label starting with $: " + operand);
+                } else {
+                    // Try parsing as an immediate number (e.g., $500)
+                    try {
+                        long long val = std::stoll(numStr);
+                        if (val < INT_MIN || val > INT_MAX) {
+                            throw std::runtime_error("Immediate value ($) out of 32-bit range: " + operand);
+                        }
+                        result.type = OperandType::IMMEDIATE;
+                        result.value = static_cast<int>(val);
+                    } catch (...) { // Catch invalid_argument, out_of_range
+                        throw std::runtime_error("Invalid immediate value or undefined data/register label starting with $: " + operand);
+                    }
                 }
             }
         } else if (toupper(operand[0]) == 'R') { // Register
