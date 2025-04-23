@@ -28,10 +28,6 @@ add_executable(masm src/main.cpp)
 target_link_libraries(masm microasm_static)
 
 
-# --- Raylib integration for decoder ---
-find_package(raylib REQUIRED)
-# --------------------------------------
-
 # Install targets
 install(TARGETS microasm_static microasm_shared
                 ARCHIVE DESTINATION lib
