@@ -20,7 +20,7 @@ enum OperandType {
 };
 
 enum Opcode {
-    MOV = 0x00, ADD, SUB, MUL, DIV, INC,
+    MOV = 0x01, ADD, SUB, MUL, DIV, INC,
     JMP, CMP, JE, JL, CALL, RET,
     PUSH, POP,
     OUT, COUT, OUTSTR, OUTCHAR,
@@ -204,21 +204,25 @@ int decoder_main(int argc, char* argv[]) {
                 int opCount = getOperandCount(opcode);
                 if (opcode == MNI) {
                     mniFunc = readString(code, tempIp);
-                    while (tempIp + 1 + 4 <= code.size()) {
+                    int size = (code[tempIp++] & 0xF0) >> 4;
+                    while (tempIp + 1 + size <= code.size()) {
                         OperandType t = static_cast<OperandType>(code[tempIp++]);
                         int v = *reinterpret_cast<const int*>(&code[tempIp]);
-                        tempIp += 4;
+                        v &= (1 << (8*size))-1;
+                        tempIp += size;
                         if (t == NONE) break;
                         operands.emplace_back(t, v);
                         if (t == DATA_ADDRESS) referencedDataOffsets.insert(v);
                     }
                 } else if (opCount >= 0) {
                     for (int i = 0; i < opCount; ++i) {
-                        if (tempIp + 1 + 4 > code.size())
+                        int size = (code[tempIp]) >> 4;
+                        if (tempIp + 1 + size > code.size())
                             throw std::runtime_error("Unexpected end of code segment while reading operand");
-                        OperandType t = static_cast<OperandType>(code[tempIp++]);
+                        OperandType t = static_cast<OperandType>(code[tempIp++] & 0b1111);
                         int v = *reinterpret_cast<const int*>(&code[tempIp]);
-                        tempIp += 4;
+                        v = v & (1<<(8*(size)))-1;
+                        tempIp += size;
                         operands.emplace_back(t, v);
                         if (t == DATA_ADDRESS) referencedDataOffsets.insert(v);
                     }

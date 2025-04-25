@@ -36,7 +36,7 @@ Each instruction is encoded as:
 | 0x00  | NONE                  | (Special, e.g. MNI end marker)     |0 byte          |
 | 0x01  | REGISTER              | Register index (see below)         |1 byte          |
 | 0x02  | IMMEDIATE             | 32-bit integer                     |1-4 bytes       |
-| 0x03  | LABEL_ADDRESS         | Code offset                        |1-4 bytes       |
+| 0x03  | LABEL_ADDRESS         | Code offset                        |4 bytes         |
 | 0x04  | DATA_ADDRESS          | Data segment offset                |1-4 bytes       |
 | 0x05  | REGISTER_AS_ADDRESS   | Register index (address in reg)    |1 byte          |
 
