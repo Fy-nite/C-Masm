@@ -427,7 +427,7 @@ void Compiler::compile(const std::string& outputFile) {
     // Prepare the header
     BinaryHeader header;
     header.magic = 0x4D53414D; // "MASM"
-    header.version = 1;
+    header.version = VERSION;
     header.codeSize = actualCodeSize;
     header.dataSize = dataSegment.size();
     header.entryPoint = entryPointAddress; // Set the found entry point

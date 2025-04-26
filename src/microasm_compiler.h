@@ -8,6 +8,8 @@
 #include "common_defs.h"   // Include common definitions (Opcode, BinaryHeader)
 #include "operand_types.h" // Include operand types
 
+#define VERSION 2
+
 // Define Instruction struct here
 struct Instruction {
     Opcode opcode;

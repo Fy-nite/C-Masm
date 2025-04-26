@@ -137,6 +137,12 @@ int getOperandCount(Opcode opcode) {
     }
 }
 
+int getOperandSize(char type) {
+    int ret =  type >> 4;
+    if (ret == 0) ret = 4;
+    return ret;
+}
+
 // ANSI color codes
 #define CLR_RESET   "\033[0m"
 #define CLR_OPCODE  "\033[1;36m"
@@ -204,7 +210,7 @@ int decoder_main(int argc, char* argv[]) {
                 int opCount = getOperandCount(opcode);
                 if (opcode == MNI) {
                     mniFunc = readString(code, tempIp);
-                    int size = (code[tempIp++] & 0xF0) >> 4;
+                    int size = getOperandSize(code[tempIp]);
                     while (tempIp + 1 + size <= code.size()) {
                         OperandType t = static_cast<OperandType>(code[tempIp++]);
                         int v = *reinterpret_cast<const int*>(&code[tempIp]);
@@ -216,12 +222,12 @@ int decoder_main(int argc, char* argv[]) {
                     }
                 } else if (opCount >= 0) {
                     for (int i = 0; i < opCount; ++i) {
-                        int size = (code[tempIp]) >> 4;
+                        int size = getOperandSize(code[tempIp]);
                         if (tempIp + 1 + size > code.size())
                             throw std::runtime_error("Unexpected end of code segment while reading operand");
                         OperandType t = static_cast<OperandType>(code[tempIp++] & 0b1111);
                         int v = *reinterpret_cast<const int*>(&code[tempIp]);
-                        v = v & (1<<(8*(size)))-1;
+                        if (size != 4) v = v & (1<<(8*(size)))-1;
                         tempIp += size;
                         operands.emplace_back(t, v);
                         if (t == DATA_ADDRESS) referencedDataOffsets.insert(v);
