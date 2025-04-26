@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
     // --- Debug Flag Handling ---
     bool enableDebug = false;
     std::vector<char*> args_filtered;
-    // args_filtered.push_back(argv[0]); // Keep program name
+    args_filtered.push_back(argv[0]); // Keep program name
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -100,9 +100,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // // Update argc and argv to the filtered list
-    // argc = args_filtered.size();
-    // argv = args_filtered.data();
+    // Update argc and argv to the filtered list
+    argc = args_filtered.size();
+    argv = args_filtered.data();
     // --- End Debug Flag Handling ---
 
 
@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
         return microasm_compiler_main(argc - 2, argv + 2); // argc-2/argv+2 skips the program name
     } else if (mode == "-i") {
         // Pass filtered args to interpreter main
-        return microasm_interpreter_main(argc - 2, argv + 2); // argc-1/argv+1 skips the program name
+        return microasm_interpreter_main(argc - 1, argv + 1); // argc-1/argv+1 skips the program name
      } else if (mode == "-u") {
         printf("Decoder mode selected.\n");
         // Pass filtered args to decoder main

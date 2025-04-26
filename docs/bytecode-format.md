@@ -28,19 +28,17 @@ Each instruction is encoded as:
 - **1 byte**: Opcode
 - For each operand:
   - **1 byte**: Operand type
-  - **1-4 bytes**: Operand value (int32, little-endian)
+  - **4 bytes**: Operand value (int32, little-endian)
 
 ### Operand Types
-| Value | Name                  | Description                        | Size           |
-|-------|-----------------------|------------------------------------|----------------|
-| 0x00  | NONE                  | (Special, e.g. MNI end marker)     |0 byte          |
-| 0x01  | REGISTER              | Register index (see below)         |1 byte          |
-| 0x02  | IMMEDIATE             | 32-bit integer                     |1-4 bytes       |
-| 0x03  | LABEL_ADDRESS         | Code offset                        |4 bytes         |
-| 0x04  | DATA_ADDRESS          | Data segment offset                |1-4 bytes       |
-| 0x05  | REGISTER_AS_ADDRESS   | Register index (address in reg)    |1 byte          |
-
-Operand types also encode the size of the operand. Operands have the format of 0xST where S is the size of the operand in bytes and T is the operand type.
+| Value | Name                  | Description                        |
+|-------|-----------------------|------------------------------------|
+| 0x00  | NONE                  | (Special, e.g. MNI end marker)     |
+| 0x01  | REGISTER              | Register index (see below)         |
+| 0x02  | IMMEDIATE             | 32-bit integer                     |
+| 0x03  | LABEL_ADDRESS         | Code offset                        |
+| 0x04  | DATA_ADDRESS          | Data segment offset                |
+| 0x05  | REGISTER_AS_ADDRESS   | Register index (address in reg)    |
 
 ### Register Indices
 | Name | Index |
@@ -110,17 +108,17 @@ hlt
 - entryPoint: 0
 
 ### Step 2: Code Segment (18 bytes)
-| Offset | Bytes (hex)         | Meaning                          |
-|--------|---------------------|----------------------------------|
-| 0      | 33                  | IN opcode (0x33)                 |
-| 1      | 14                  | DATA_ADDRESS (0x04) 1 byte       |
-| 2      | 64                  | $100 = 0x64                      |
-| 3      | 0F                  | OUT opcode (0x0F)                |
-| 4      | 12                  | IMMEDIATE (0x02)    1 byte       |
-| 5      | 01                  | port 1                           |
-| 6      | 14                  | DATA_ADDRESS (0x04) 1 byte       |
-| 7      | 64                  | $100 = 0x64                      |
-| 8      | 13                  | HLT opcode (0x13)                |
+| Offset | Bytes (hex)         | Meaning                |
+|--------|---------------------|------------------------|
+| 0      | 33                  | IN opcode (0x33)       |
+| 1      | 04                  | DATA_ADDRESS (0x04)    |
+| 2-5    | 64 00 00 00         | $100 = 0x64            |
+| 6      | 0F                  | OUT opcode (0x0F)      |
+| 7      | 02                  | IMMEDIATE (0x02)       |
+| 8-11   | 01 00 00 00         | port 1                 |
+| 12     | 04                  | DATA_ADDRESS (0x04)    |
+| 13-16  | 64 00 00 00         | $100 = 0x64            |
+| 17     | 13                  | HLT opcode (0x13)      |
 
 ### Step 3: Data Segment
 - (empty in this example)
@@ -147,12 +145,12 @@ To print 5 bytes from address $200 to stdout:
 | Bytes (hex)         | Meaning                |
 |---------------------|------------------------|
 | 11                  | OUTSTR opcode (0x11)   |
-| 02                  | IMMEDIATE (port) 1 byte|
-| 01                  | 1                      |
-| 04                  | DATA_ADDRESS     1 byte|
-| C8                  | $200 = 0xC8            |
-| 02                  | IMMEDIATE (len)  1 byte|
-| 05                  | 5                      |
+| 02                  | IMMEDIATE (port)       |
+| 01 00 00 00         | 1                      |
+| 04                  | DATA_ADDRESS           |
+| C8 00 00 00         | $200 = 0xC8            |
+| 02                  | IMMEDIATE (len)        |
+| 05 00 00 00         | 5                      |
 
 ---
 

@@ -8,8 +8,6 @@
 #include "common_defs.h"   // Include common definitions (Opcode, BinaryHeader)
 #include "operand_types.h" // Include operand types
 
-#define VERSION 2
-
 // Define Instruction struct here
 struct Instruction {
     Opcode opcode;
@@ -30,6 +28,7 @@ class Compiler {
     std::unordered_map<std::string, int> labelMap;
     std::vector<Instruction> instructions; // Now knows what Instruction is
     std::vector<char> dataSegment;
+    std::unordered_map<std::string, int> dataLabels;
     int currentAddress = 0;
     int dataAddress = 0;
     bool debugMode = false;
