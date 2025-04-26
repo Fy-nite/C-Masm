@@ -510,9 +510,9 @@ void Interpreter::execute() {
                     switch (op_val.type) {
                         case OperandType::DATA_ADDRESS: {
                             // Get the absolute RAM address (Base + Offset)
-                            int address = dataSegmentBase + op_val.value;
+                            int address = op_val.value;
                             if (address < 0 || address >= ram.size()) {
-                                 throw std::runtime_error("OUT: Data address out of RAM bounds: Base=" + std::to_string(dataSegmentBase) + ", Offset=" + std::to_string(op_val.value));
+                                 throw std::runtime_error("OUT: Data address out of RAM bounds: " + std::to_string(op_val.value));
                             }
                             out_stream << readRamString(address); // Read and print the string from RAM
                             break;
@@ -591,7 +591,7 @@ void Interpreter::execute() {
                         }
                         destAddr = registers[reg_index];
                     } else if (op_dest.type == OperandType::DATA_ADDRESS) {
-                        destAddr = dataSegmentBase + op_dest.value;
+                        destAddr = op_dest.value;
                     } else {
                          throw std::runtime_error("IN requires a destination operand of type REGISTER_AS_ADDRESS ($R<n>) or DATA_ADDRESS ($<label>)");
                     }
