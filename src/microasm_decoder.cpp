@@ -196,15 +196,19 @@ char* repr(char* str) {
 
 // Always define as decoder_main when included in the main project
 int decoder_main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: masmd <file.bin>" << std::endl;
+    if (argc < 1) {
+        std::cerr << "Usage: masm -u <file.bin> [output.masm]" << std::endl;
         return 1;
     }
-    std::ifstream in(argv[1], std::ios::binary);
+    char* file = argv[0];
+    char* output = argv[1];
+    std::ifstream in(file, std::ios::binary);
     if (!in) {
-        std::cerr << "Error: Cannot open input file: " << argv[1] << std::endl;
+        std::cerr << "Error: Cannot open input file: " << file << std::endl;
         return 1;
     }
+
+    std::vector<std::string> instructions;
 
     try {
         BinaryHeader header;
