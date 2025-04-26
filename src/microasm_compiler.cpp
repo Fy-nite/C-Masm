@@ -460,26 +460,20 @@ void Compiler::compile(const std::string& outputFile) {
             out.put('\0');
             byteOffset += instr.mniFunctionName.length() + 1;
 
-            // Write operands
+            // Write operands as [type][value] pairs
             for (const auto& operand : instr.operands) {
                 ResolvedOperand resolved = resolveOperand(operand, instr.opcode);
                 if (debugMode) std::cout << "[Debug][Compiler]     Operand Type: 0x" << std::hex << static_cast<int>(resolved.type) << ", Value: " << std::dec << resolved.value << " (0x" << std::hex << resolved.value << std::dec << ")\n";
-                int value_size = calculateOperandSize(operand);
                 out.put(static_cast<char>(resolved.type));
-                const char * value = reinterpret_cast<const char*>(&resolved.value);
-                for (int i=0; i<value_size; i++) {
-                    out.put(value[i]);
-                }
-                byteOffset += 1 + value_size;
+                int32_t value = static_cast<int32_t>(resolved.value);
+                out.write(reinterpret_cast<const char*>(&value), sizeof(int32_t));
+                byteOffset += 1 + sizeof(int32_t);
             }
-            // Write end marker
-            ResolvedOperand endMarker;
-            endMarker.type = OperandType::NONE;
-            endMarker.value = 0;
-            if (debugMode) std::cout << "[Debug][Compiler]     Operand Type: 0x" << std::hex << static_cast<int>(endMarker.type) << " (End Marker)\n";
-            out.put(static_cast<char>(endMarker.type));
-            out.write(reinterpret_cast<const char*>(&endMarker.value), sizeof(endMarker.value));
-            byteOffset += 1 + sizeof(endMarker.value);
+            // Write end marker: type=NONE, value=0
+            out.put(static_cast<char>(OperandType::NONE));
+            int32_t zero = 0;
+            out.write(reinterpret_cast<const char*>(&zero), sizeof(int32_t));
+            byteOffset += 1 + sizeof(int32_t);
 
         } else {
             // Write regular operands
