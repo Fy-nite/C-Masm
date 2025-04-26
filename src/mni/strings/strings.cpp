@@ -1,5 +1,6 @@
 #include "../../microasm_interpreter.h"
 #include <cstring>
+#include <stdexcept>
 
 // Register the MNI function when this file is loaded
 

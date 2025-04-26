@@ -337,7 +337,7 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
              std::string addr = dataLabel;
              addr.erase(0, 1);
              int addre = std::stoi(addr);
-             int size = dataValue.length();
+             int size = dataValue.length() + 1;
              dataSegment.push_back(addre & 0xFF);
              dataSegment.push_back(addre >> 8);
              dataSegment.push_back(size & 0xFF);

@@ -194,6 +194,29 @@ char* repr(char* str) {
     return ret;
 }
 
+template< typename T >
+std::string int_to_hex( T i )
+{
+  std::stringstream stream;
+  stream << "0x" 
+         << std::setfill ('0') << std::setw(sizeof(T)*2) 
+         << std::hex << i;
+  return stream.str();
+}
+
+bool contains(int line, std::vector<int> labels, std::vector<std::pair<int, int>> addr_to_line, int* label_i) {
+    for (int i=0;i<labels.size();i++) {
+        int lbl = labels[i];
+        for (auto& pair : addr_to_line) {
+            if (pair.first == lbl && pair.second == line) {
+                *label_i = i;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // Always define as decoder_main when included in the main project
 int decoder_main(int argc, char* argv[]) {
     if (argc < 1) {
@@ -209,6 +232,9 @@ int decoder_main(int argc, char* argv[]) {
     }
 
     std::vector<std::string> instructions;
+    std::vector<std::pair<int, int>> addr_to_line;
+    std::vector<int> labels;
+    int entry_line;
 
     try {
         BinaryHeader header;
@@ -237,7 +263,13 @@ int decoder_main(int argc, char* argv[]) {
         std::cout << "--------|--------------|--------------------------------" << std::endl;
 
         size_t ip = 0;
+        int line = 0;
+        int label_i = 0;
         while (ip < code.size()) {
+            if (ip == header.entryPoint) {
+                entry_line = line;
+            }
+            addr_to_line.push_back(std::pair(ip, line));
             size_t startIp = ip;
             uint8_t opcodeByte = code[ip++];
             Opcode opcode = static_cast<Opcode>(opcodeByte);
@@ -276,6 +308,7 @@ int decoder_main(int argc, char* argv[]) {
                         if (size != 4) v = v & (1<<(8*(size)))-1;
                         tempIp += size;
                         operands.emplace_back(t, v);
+                        if (t == LABEL_ADDRESS) labels.push_back(v);
                         if (t == DATA_ADDRESS) referencedDataOffsets.insert(v);
                     }
                 } else if (!opcodeToString.count(opcode)) {
@@ -294,20 +327,43 @@ int decoder_main(int argc, char* argv[]) {
             // Colorize disassembly
             if (opcode == MNI) {
                 std::cout << CLR_OPCODE << "MNI" << CLR_RESET << " " << CLR_OPERAND << mniFunc << CLR_RESET;
-                for (auto& op : operands)
+                std::string op_str = "MNI " + mniFunc;
+                for (auto& op : operands) {
+                    std::string operand = formatOperand(op.first, op.second);
+                    if (op.first == LABEL_ADDRESS) {
+                        op_str += " #label_" + std::to_string(label_i++);
+                    } else {
+                        op_str += " " + operand;
+                    }
                     std::cout << " " << CLR_OPERAND << formatOperand(op.first, op.second) << CLR_RESET;
+                }
+                instructions.push_back(op_str);
                 std::cout << std::endl;
             } else if (opcodeToString.count(opcode)) {
-                std::cout << CLR_OPCODE << opcodeToString.at(opcode) << CLR_RESET;
-                for (auto& op : operands)
-                    std::cout << " " << CLR_OPERAND << formatOperand(op.first, op.second) << CLR_RESET;
+                std::string op_str = opcodeToString.at(opcode);
+                std::cout << CLR_OPCODE << op_str << CLR_RESET;
+                for (auto& op : operands) {
+                    std::string operand = formatOperand(op.first, op.second);
+                    if (op.first == LABEL_ADDRESS) {
+                        if (op.second == header.entryPoint)
+                            op_str += " #main";
+                        else 
+                            op_str += " #label_" + std::to_string(label_i++);
+                    } else {
+                        op_str += " " + operand;
+                    }
+                    std::cout << " " << CLR_OPERAND << operand << CLR_RESET;
+                }
+                instructions.push_back(op_str);
                 std::cout << std::endl;
             } else {
                 std::cout << CLR_ERROR << "Unknown Opcode (0x" << std::hex << (int)opcodeByte << std::dec << ")" << CLR_RESET << std::endl;
+                instructions.push_back("Unknown Opcode (0x" + int_to_hex(opcodeByte) + ")");
                 unknown = true;
             }
             if (unknown) break;
             ip = endIp;
+            line++;
         }
         std::cout << "--------|--------------|--------------------------------" << std::endl << std::endl;
 
@@ -323,7 +379,9 @@ int decoder_main(int argc, char* argv[]) {
             int16_t size = *(int16_t*)&mem_data[2];
             mem_data += 4;
             std::string data_string;
-            std::cout << "DB $" << addr << " \"" << repr(mem_data) << "\"\n";
+            std::string ins = "DB $" + std::to_string((int)addr) + " \"" + repr(mem_data) + "\"";
+            std::cout << ins << std::endl;
+            instructions.push_back(ins);
             mem_data += size;
         }
         free((char*)tmp_data);
@@ -363,6 +421,22 @@ int decoder_main(int argc, char* argv[]) {
         // }
         if (header.dataSize == 0) std::cout << "(Empty)" << std::endl;
         std::cout << "--------------" << std::endl;
+
+        if (argc >= 2) {
+            std::string decompiled;
+            for (int i=0;i<instructions.size();i++) {
+                std::string ins = instructions[i];
+                if (i==entry_line) {
+                    decompiled += "\nlbl main\n";
+                } else if (contains(i, labels, addr_to_line, &label_i)) {
+                    decompiled += "\nlbl label_" + std::to_string(label_i) + "\n";
+                }
+                decompiled += ins + "\n";
+            }
+            std::ofstream out(output);
+            out << decompiled;
+            out.close();
+        }
     } catch (const std::exception& e) {
         std::cerr << CLR_ERROR << "Decoding Error: " << e.what() << CLR_RESET << std::endl;
         return 1;

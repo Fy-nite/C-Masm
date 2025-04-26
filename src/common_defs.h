@@ -53,9 +53,9 @@ enum Opcode {
     COPY, FILL, CMP_MEM,
     // Module Native Interface call
     MNI,
+    IN,
     // Pseudo-instructions (handled during compilation, not runtime)
     INCLUDE = 0xF2, // Placeholder for include directive logic (handled pre-compilation)
-    IN
 };
 
 #endif // COMMON_DEFS_H
