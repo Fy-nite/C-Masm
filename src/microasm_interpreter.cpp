@@ -499,36 +499,43 @@ void Interpreter::execute() {
                     if(debugMode) std::cout << "[Debug][Interpreter]     Popped value " << val << " into R" << dest_reg << ". New SP: 0x" << std::hex << sp << std::dec << "\n";
                     break;
                 }
-
+            
                 // I/O Operations
                 case OUT: {
-                    BytecodeOperand op_port = nextRawOperand();
-                    BytecodeOperand op_val = nextRawOperand();
+                    BytecodeOperand op_port = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Port): " << formatOperandDebug(op_port) << "\n";
+                    BytecodeOperand op_val = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op2(Val ): " << formatOperandDebug(op_val) << "\n";
                     int port = getValue(op_port);
                     std::ostream& out_stream = (port == 2) ? std::cerr : std::cout;
                     if (port != 1 && port != 2) throw std::runtime_error("Invalid port for OUT: " + std::to_string(port));
                     switch (op_val.type) {
                         case OperandType::DATA_ADDRESS: {
-                            int address = getValue(op_val);
-                            out_stream << readRamString(address);
+                            // Get the absolute RAM address (Base + Offset)
+                            int address = dataSegmentBase + op_val.value;
+                            if (address < 0 || address >= ram.size()) {
+                                 throw std::runtime_error("OUT: Data address out of RAM bounds: Base=" + std::to_string(dataSegmentBase) + ", Offset=" + std::to_string(op_val.value));
+                            }
+                            out_stream << readRamString(address); // Read and print the string from RAM
                             break;
                         }
                         case OperandType::REGISTER_AS_ADDRESS: {
                             int reg_index = op_val.value;
                             if (reg_index < 0 || reg_index >= registers.size()) {
-                                throw std::runtime_error("Invalid register index for REGISTER_AS_ADDRESS: " + std::to_string(reg_index));
+                                throw std::runtime_error("OUT: Invalid register index for REGISTER_AS_ADDRESS: " + std::to_string(reg_index));
                             }
-                            int address = registers[reg_index];
-                            out_stream << readRamString(address);
+                            int address = registers[reg_index]; // Get address from register
+                             if (address < 0 || address >= ram.size()) {
+                                 throw std::runtime_error("OUT: Address in register R" + std::to_string(reg_index) + " (" + std::to_string(address) + ") is out of RAM bounds");
+                             }
+                            out_stream << readRamString(address); // Read and print the string from RAM
                             break;
                         }
                         case OperandType::REGISTER: {
                             int reg_val = registers[getRegisterIndex(op_val)];
-                            out_stream << reg_val;
+                            out_stream << reg_val; // Print the integer value in the register
                             break;
                         }
                         case OperandType::IMMEDIATE: {
-                            out_stream << op_val.value;
+                            out_stream << op_val.value; // Print the immediate integer value
                             break;
                         }
                         default:
@@ -575,9 +582,32 @@ void Interpreter::execute() {
                 }
                 case IN: {
                     BytecodeOperand op_dest = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Dest): " << formatOperandDebug(op_dest) << "\n";
-                    int destAddr = getValue(op_dest);
+                    // Destination can be REGISTER_AS_ADDRESS or DATA_ADDRESS
+                    int destAddr;
+                    if (op_dest.type == OperandType::REGISTER_AS_ADDRESS) {
+                        int reg_index = op_dest.value;
+                        if (reg_index < 0 || reg_index >= registers.size()) {
+                            throw std::runtime_error("IN: Invalid register index for REGISTER_AS_ADDRESS: " + std::to_string(reg_index));
+                        }
+                        destAddr = registers[reg_index];
+                    } else if (op_dest.type == OperandType::DATA_ADDRESS) {
+                        destAddr = dataSegmentBase + op_dest.value;
+                    } else {
+                         throw std::runtime_error("IN requires a destination operand of type REGISTER_AS_ADDRESS ($R<n>) or DATA_ADDRESS ($<label>)");
+                    }
+
+                    if (destAddr < 0 || destAddr >= ram.size()) { // Basic check, might need more space
+                         throw std::runtime_error("IN: Destination address " + std::to_string(destAddr) + " is out of RAM bounds");
+                    }
+
                     std::string input;
                     std::getline(std::cin, input);
+
+                    // Check if there's enough space in RAM
+                    if (destAddr + input.size() + 1 > ram.size()) { // +1 for null terminator
+                        throw std::runtime_error("IN: Not enough RAM space at address " + std::to_string(destAddr) + " for input string of size " + std::to_string(input.size()));
+                    }
+
                     // Write input and null terminator to memory
                     std::copy(input.begin(), input.end(), ram.begin() + destAddr);
                     ram[destAddr + input.size()] = '\0';
@@ -585,7 +615,7 @@ void Interpreter::execute() {
                 }
 
                 // Program Control
-                case HLT: { if(debugMode) std::cout << "[Debug][Interpreter] HLT encountered.\n"; std::cout << "HLT encountered. Execution finished." << std::endl; return; } // Halt execution
+                case HLT: { if(debugMode) std::cout << "[Debug][Interpreter] HLT encountered.\n";  return; } // Halt execution
                 case ARGC: {
                     BytecodeOperand op_dest = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Dest): " << formatOperandDebug(op_dest) << "\n";
                     registers[getRegisterIndex(op_dest)] = cmdArgs.size(); // Use cmdArgs member

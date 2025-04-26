@@ -1,0 +1,8 @@
+/usr/local/lib/libmicroasm.a
+/usr/local/lib/libmicroasm.dylib
+/usr/local/bin/masm
+/usr/local/include/microasm/debug_macros.h
+/usr/local/include/microasm/microasm_compiler.h
+/usr/local/include/microasm/operand_types.h
+/usr/local/include/microasm/common_defs.h
+/usr/local/include/microasm/debug_macros.h

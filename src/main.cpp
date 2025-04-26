@@ -115,24 +115,68 @@ int main(int argc, char* argv[]) {
     std::string mode = argv[1];
 
     if (mode == "-c") {
-        // Pass filtered args to compiler main
-        return microasm_compiler_main(argc - 2, argv + 2); // argc-2/argv+2 skips the program name
-    } else if (mode == "-i") {
-        // Pass filtered args to interpreter main
-        return microasm_interpreter_main(argc - 2, argv + 2); // argc-1/argv+1 skips the program name
-     } else if (mode == "-u") {
-        printf("Decoder mode selected.\n");
-        // Pass filtered args to decoder main
-        for (int i = 0; i < argc; ++i) {
-            std::cout << "Arg " << i << ": " << argv[i] << "\n";
+        if (argc < 3) {
+             std::cerr << CLR_ERROR << "Error: No source file specified for compilation." << CLR_RESET << "\n";
+             return 1;
         }
-        return decoder_main(argc, argv + 1); // Call the decoder main function
-    }
+        std::string inputFile = argv[2];
+        if (!fs::exists(inputFile)) {
+            std::cerr << CLR_ERROR << "Error: Source file does not exist: " << inputFile << CLR_RESET << "\n";
+            return 1;
+        }
+         if (fs::path(inputFile).extension() != ".masm") {
+             std::cerr << CLR_ERROR << "Error: Input file for compilation must be a .masm file: " << inputFile << CLR_RESET << "\n";
+             return 1;
+         }
+        if (enableDebug) std::cout << "[Debug] Compile mode selected.\n";
+     
+        return microasm_compiler_main(argc - 2, argv + 2); // Pass debug flag
+    } else if (mode == "-i") {
+        if (argc < 3) {
+            std::cerr << CLR_ERROR << "Error: No file specified for interpretation." << CLR_RESET << "\n";
+            return 1;
+        }
+        // Check if the file exists and is a valid file
+        std::string inputFile = argv[2]; // File is at index 2
 
+        if (!fs::exists(inputFile)) {
+            std::cerr << CLR_ERROR << "Error: Input file does not exist: " << inputFile << CLR_RESET << "\n";
+            return 1;
+        }
+        if (enableDebug) std::cout << "[Debug] Interpret mode selected.\n";
+        // Pass remaining args (file onwards) to interpreter main
+        return microasm_interpreter_main(argc - 2, argv + 2); // Pass debug flag
+     } else if (mode == "-u") {
+        if (argc < 3) {
+            std::cerr << CLR_ERROR << "Error: No file specified for decoding." << CLR_RESET << "\n";
+            return 1;
+        }
+        std::string inputFile = argv[2]; // File is at index 2
+        if (!fs::exists(inputFile)) {
+            std::cerr << CLR_ERROR << "Error: Input file does not exist: " << inputFile << CLR_RESET << "\n";
+            return 1;
+        }
+         // Check if it's a .bin file?
+         if (fs::path(inputFile).extension() != ".bin") {
+             std::cerr << CLR_ERROR << "Warning: Input file for decoding might not be a .bin file: " << inputFile << CLR_RESET << "\n";
+         }
+        if (enableDebug) std::cout << "[Debug] Decode mode selected.\n";
+        // Pass remaining args (file onwards) and debug flag to decoder main
+        return decoder_main(argc - 2, argv + 2); // Pass debug flag
+    }
+    // Handle direct .masm file execution (mode is the filename)
     else if (fs::path(mode).extension() == ".masm") {
-        // Compile and run the .masm file directly using classes
-        std::string sourceFile = mode;
+        std::string sourceFile = mode; // mode is the filename argv[1]
         fs::path inputPath = fs::absolute(sourceFile);
+
+        // Check if source file exists before proceeding
+        if (!fs::exists(inputPath)) {
+             std::cerr << CLR_ERROR << "Error: Source file does not exist: " << sourceFile << CLR_RESET << std::endl;
+             return 1;
+        }
+
+        if (enableDebug) std::cout << "[Debug] Direct execution mode selected for: " << sourceFile << "\n";
+
         fs::path parentDir = inputPath.parent_path();
         std::string stem = inputPath.stem().string();
         fs::path tempBinaryPath = parentDir / (stem + ".bin");
@@ -141,23 +185,18 @@ int main(int argc, char* argv[]) {
         try {
             // --- Compile Step ---
             if (enableDebug) std::cout << "[Debug] Compiling " << sourceFile << " to " << tempBinary << "\n";
-            Compiler compiler; // Now uses declaration from microasm_compiler.h
-            compiler.setDebugMode(enableDebug);
+            Compiler compiler;
+            compiler.setDebugMode(enableDebug); // Pass debug flag to compiler class
 
-            // The compiler's parse method needs the source *content*, not filename
-            // Read the source file content first
              std::ifstream fileStream(sourceFile);
              if (!fileStream) {
                  throw std::runtime_error("Could not open source file: " + sourceFile);
              }
              std::ostringstream buffer;
              buffer << fileStream.rdbuf();
-             fileStream.close(); // Close the file stream
+             fileStream.close();
 
-            // Parse the source content
-            compiler.parse(buffer.str()); // Use parse method with string content
-
-            // Compile to output file
+            compiler.parse(buffer.str());
             compiler.compile(tempBinary);
 
             if (enableDebug) std::cout << "[Debug] Compilation successful.\n";
@@ -165,26 +204,55 @@ int main(int argc, char* argv[]) {
             // --- Interpret Step ---
             // Prepare arguments for the interpreted program (skip program name and source file)
             std::vector<std::string> programArgs;
+            // Arguments start from argv[2] onwards
             for (int i = 2; i < argc; ++i) {
                 programArgs.push_back(argv[i]);
             }
 
             if (enableDebug) std::cout << "[Debug] Interpreting " << tempBinary << "\n";
-            Interpreter interpreter(65536, programArgs, enableDebug); // Now uses declaration from microasm_interpreter.h
+            Interpreter interpreter(65536, programArgs, enableDebug); // Pass debug flag to interpreter class
             interpreter.load(tempBinary);
             interpreter.execute();
 
-            fs::remove(tempBinary); // Clean up the temporary binary file
+            // Only remove temp file if debug mode is OFF
+            if (!enableDebug && fs::exists(tempBinary)) {
+                 fs::remove(tempBinary);
+                 // Optional debug message even when debug is off, confirming cleanup
+                 // std::cout << "[Info] Removed temporary binary: " << tempBinary << "\n";
+            } else if (enableDebug && fs::exists(tempBinary)) {
+                 std::cout << "[Debug] Kept temporary binary (debug mode enabled): " << tempBinary << "\n";
+            }
             return 0; // Success
 
         } catch (const std::exception& e) {
-            std::cerr << "Error: " << e.what() << std::endl;
-            fs::remove(tempBinary); // Clean up temp file on failure
+            std::cerr << CLR_ERROR << "Error: " << e.what() << CLR_RESET << std::endl;
+            // Attempt cleanup even on failure, but check if file exists and debug is off
+            if (!enableDebug && fs::exists(tempBinary)) {
+                fs::remove(tempBinary);
+            }
             return 1;
         }
 
     } else {
-        std::cerr << "Unknown mode or file: " << mode << "\n";
+        std::cerr << CLR_ERROR << "Error: Unknown mode or invalid file type: " << mode << CLR_RESET << "\n";
+        // Print usage information again
+         std::vector<std::string> usageContent = {
+             "Usage: masm [mode] [options] [file]",
+             "Modes:",
+             "  -c <file.masm> Compile a .masm file to binary.",
+             "  -i <file>      Interpret a .masm file or binary.",
+             "  -u <file.bin>  Decode/disassemble a binary file.",
+             "  <file.masm>    Compile and run a .masm file directly.",
+             "Options:",
+             "  -d, --debug    Enable debug mode.",
+             "Examples:",
+             "  microasm -c example.masm",
+             "  microasm -i example.masm",
+             "  microasm -i example.bin",
+             "  microasm -u example.bin",
+             "  microasm example.masm [program args...]"
+         };
+        drawAsciiBox("MicroASM Usage", usageContent);
         return 1;
     }
 }
