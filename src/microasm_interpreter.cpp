@@ -13,7 +13,7 @@
 #include <functional>
 #include <iomanip>
 #include <sstream> // Add this header for std::stringstream
-#define VERSION 2
+
 // Include own header FIRST
 #include "microasm_interpreter.h"
 
@@ -48,6 +48,8 @@ Interpreter::Interpreter(int ramSize, const std::vector<std::string>& args, bool
     bp = registers[6];
     // Set data segment base - let's put it in the middle for now
     // Ensure this doesn't collide with stack growing down!
+    dataSegmentBase = ramSize / 2;
+    if (dataSegmentBase < 0) dataSegmentBase = 0; // Handle tiny RAM sizes
 
     // Initialize MNI functions
     initializeMNIFunctions();
@@ -55,32 +57,23 @@ Interpreter::Interpreter(int ramSize, const std::vector<std::string>& args, bool
     if (debugMode) std::cout << "[Debug][Interpreter] Debug mode enabled. RAM Size: " << ramSize << "\n";
 }
 
-int Interpreter::getOperandSize(char type) {
-    int ret =  type >> 4;
-    if (ret == 0) ret = 4;
-    return ret;
-}
-
-
 BytecodeOperand Interpreter::nextRawOperand() {
-    int size = getOperandSize(bytecode_raw[ip]);
-    if (ip + 1 + size > bytecode_raw.size()) { // Check size for type byte + value int
+    if (ip + 1 + sizeof(int) > bytecode_raw.size()) { // Check size for type byte + value int
          throw std::runtime_error("Unexpected end of bytecode reading typed operand (IP: " + std::to_string(ip) + ", CodeSize: " + std::to_string(bytecode_raw.size()) + ")");
     }
     BytecodeOperand operand;
-    operand.type = static_cast<OperandType>(bytecode_raw[ip++] & 15);
+    operand.type = static_cast<OperandType>(bytecode_raw[ip++]);
     // Handle NONE type immediately if needed (though it shouldn't be read here usually)
     if (operand.type == OperandType::NONE) {
          operand.value = 0; // No value associated
          // ip adjustment might depend on how NONE is encoded (e.g., if it has a dummy value)
          // Assuming it's just the type byte based on compiler code for MNI marker
     } else {
-         if (ip + size > bytecode_raw.size()) {
+         if (ip + sizeof(int) > bytecode_raw.size()) {
              throw std::runtime_error("Unexpected end of bytecode reading operand value (IP: " + std::to_string(ip) + ")");
          }
          operand.value = *reinterpret_cast<const int*>(&bytecode_raw[ip]);
-         if (size != 4) operand.value &= (1 << (8*size))-1;
-         ip += size;
+         ip += sizeof(int);
     }
     return operand;
 }
@@ -88,26 +81,21 @@ BytecodeOperand Interpreter::nextRawOperand() {
 int Interpreter::getValue(const BytecodeOperand& operand) {
     switch (operand.type) {
         case OperandType::REGISTER:
-            if (operand.value < 0 || operand.value >= registers.size()) {
-                throw std::runtime_error("Invalid register index encountered: " + std::to_string(operand.value));
-            }
-            return registers[operand.value];
         case OperandType::REGISTER_AS_ADDRESS: // For getValue, treat same as REGISTER (return content)
             if (operand.value < 0 || operand.value >= registers.size()) {
                 throw std::runtime_error("Invalid register index encountered: " + std::to_string(operand.value));
             }
-            
-            return ram[registers[operand.value]];
+            return registers[operand.value];
         case OperandType::IMMEDIATE:
         case OperandType::LABEL_ADDRESS: // Addresses are immediate values in bytecode
             return operand.value;
         case OperandType::DATA_ADDRESS:
             // Return the absolute RAM address (Base + Offset)
             // dataSegmentBase is now correctly set during loading
-            if (operand.value < 0 || operand.value >= ram.size()) {
-                 throw std::runtime_error("Data address out of RAM bounds: Addr=" + std::to_string(operand.value));
+            if (dataSegmentBase + operand.value < 0 || dataSegmentBase + operand.value >= ram.size()) {
+                 throw std::runtime_error("Data address out of RAM bounds: Base=" + std::to_string(dataSegmentBase) + ", Offset=" + std::to_string(operand.value));
             }
-            return operand.value;
+            return dataSegmentBase + operand.value;
         default:
             throw std::runtime_error("Cannot get value for unknown or invalid operand type: " + std::to_string(static_cast<int>(operand.type)));
     }
@@ -227,7 +215,7 @@ std::string Interpreter::formatOperandDebug(const BytecodeOperand& op) {
         case OperandType::REGISTER_AS_ADDRESS: ss << "($R" << op.value << ")"; break;
         case OperandType::IMMEDIATE: ss << "(Imm)"; break;
         case OperandType::LABEL_ADDRESS: ss << "(LblAddr)"; break;
-        case OperandType::DATA_ADDRESS: ss << "(DataAddr 0x" << std::hex << (op.value) << std::dec << ")"; break;
+        case OperandType::DATA_ADDRESS: ss << "(DataAddr 0x" << std::hex << (dataSegmentBase + op.value) << std::dec << ")"; break;
         default: ss << "(?)"; break;
     }
     return ss.str();
@@ -248,8 +236,8 @@ void Interpreter::load(const std::string& bytecodeFile) {
         throw std::runtime_error("Invalid magic number in bytecode file. Not a MASM binary.");
     }
     // Could add version checks here too 
-    if (header.version > VERSION) {
-        throw std::runtime_error("Unsupported bytecode version: " + std::to_string(header.version) + " (Supported version: 2)");
+    if (header.version != 1) {
+        throw std::runtime_error("Unsupported bytecode version: " + std::to_string(header.version) + " (Supported version: 1)");
     }
 
     // 3. Load Code Segment into bytecode_raw
@@ -262,22 +250,12 @@ void Interpreter::load(const std::string& bytecodeFile) {
 
     // 4. Load Data Segment into RAM at dataSegmentBase
     if (header.dataSize > 0) {
-        if (header.dataSize > ram.size()) {
-            throw std::runtime_error("RAM size (" + std::to_string(ram.size()) + ") too small for data segment (size " + std::to_string(header.dataSize) + ")");
+        if (dataSegmentBase + header.dataSize > ram.size()) {
+            throw std::runtime_error("RAM size (" + std::to_string(ram.size()) + ") too small for data segment (size " + std::to_string(header.dataSize) + " at base " + std::to_string(dataSegmentBase) + ")");
         }
-        char* data = (char*)malloc(header.dataSize * sizeof(char));
-        char* tmp_data = data;
-        in.read(data, header.dataSize);
-        while (data < tmp_data+header.dataSize) {
-            int16_t addr = *(int16_t*)&data[0];
-            int16_t size = *(int16_t*)&data[2];
-            data += 4;
-            for (int i=0;i<size;i++) {
-                ram[addr+i] = data[i];
-            }
-            data += size;
+        if (!in.read(&ram[dataSegmentBase], header.dataSize)) {
+             throw std::runtime_error("Failed to read data segment (expected " + std::to_string(header.dataSize) + " bytes)");
         }
-        free((char*)tmp_data);
     }
 
     // Check if we read exactly the expected amount
@@ -299,7 +277,7 @@ void Interpreter::load(const std::string& bytecodeFile) {
                    << ", CodeSize: " << header.codeSize
                    << ", DataSize: " << header.dataSize
                    << ", EntryPoint: 0x" << std::hex << header.entryPoint << std::dec << "\n";
-         std::cout << "[Debug][Interpreter]   Data Segment loaded" << "\n";
+         std::cout << "[Debug][Interpreter]   Data Segment loaded at RAM base: 0x" << std::hex << dataSegmentBase << std::dec << "\n";
          std::cout << "[Debug][Interpreter]   IP set to entry point: 0x" << std::hex << ip << std::dec << "\n";
     }
 }
@@ -829,7 +807,7 @@ int microasm_interpreter_main(int argc, char* argv[]) {
         // std::cout << "Execution finished successfully!" << std::endl; // HLT provides its own message
     } catch (const std::exception& e) {
         // Error already logged in execute() or load()
-        std::cerr << "Execution failed: " << e.what() << std::endl;
+        // std::cerr << "Execution failed: " << e.what() << std::endl;
         return 1;
     }
 

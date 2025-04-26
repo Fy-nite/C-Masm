@@ -59,31 +59,6 @@ void Compiler::setDebugMode(bool enabled) {
     if (debugMode) std::cout << "[Debug][Compiler] Debug mode enabled.\n";
 }
 
-int getmin(int i)
-{
-    if(i == (int8_t)(i & 0xFF))
-        return 1;
-    if(i == (int16_t)(i & 0xFFFF))
-        return 2;
-    if(i == (int32_t)(i & 0xFFFFFFFF))
-        return 4;
-    return 8;
-}
-
-int calculateOperandSize(std::string op) {
-    std::string op2 = op;
-    if (op2[0] == '$') {
-        op2.erase(0, 1);
-    }
-    if (toupper(op2[0]) == 'R') {
-        return 1;
-    } else if (op2[0] == '#') {
-        return 4;
-    } else {
-        return getmin(std::stoi(op2));
-    }
-}
-
 int Compiler::calculateInstructionSize(const Instruction& instr) {
     if (instr.opcode == DB || instr.opcode == LBL) return 0; // Pseudo-instructions
 
@@ -95,12 +70,7 @@ int Compiler::calculateInstructionSize(const Instruction& instr) {
         return size;
     } else {
         // Regular instruction size
-        int size = 1;
-        for (int i=0; i<instr.operands.size(); i++) {
-            std::string op = instr.operands[i];
-            size += 1 + calculateOperandSize(op);
-        }
-        return size;
+        return 1 + instr.operands.size() * (1 + sizeof(int));
     }
 }
 
@@ -318,6 +288,7 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
                  // If it still fails, throw the error
                  throw std::runtime_error("DB requires a quoted string (check quotes and content): [" + dataValue + "]");
              }
+             dataLabels[dataLabel] = dataAddress;
              // Handle escape sequences like \n (basic implementation)
              std::string processedValue;
              for (size_t i = 0; i < dataValue.length(); ++i) {
@@ -334,20 +305,13 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
                      processedValue += dataValue[i];
                  }
              }
-             std::string addr = dataLabel;
-             addr.erase(0, 1);
-             int addre = std::stoi(addr);
-             int size = dataValue.length();
-             dataSegment.push_back(addre & 0xFF);
-             dataSegment.push_back(addre >> 8);
-             dataSegment.push_back(size & 0xFF);
-             dataSegment.push_back(size >> 8);
+
              for(char c : processedValue) {
                  dataSegment.push_back(c);
              }
              dataSegment.push_back('\0'); // Null-terminate for convenience
              dataAddress += processedValue.length() + 1;
-             if (debugMode) std::cout << "[Debug][Compiler]   Defined data label '" << dataLabel << " with value \"" << processedValue << "\"\n";
+             if (debugMode) std::cout << "[Debug][Compiler]   Defined data label '" << dataLabel << "' at data offset " << dataLabels[dataLabel] << " with value \"" << processedValue << "\"\n";
 
         } else if (upperToken == "MNI") {
             Instruction instr;
@@ -373,6 +337,16 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
             instr.opcode = getOpcode(upperToken);
             std::string operand;
             while (stream >> operand) {
+                // -- immediate detection for MOV: if token is a bare integer, prefix with '$'
+                if (instr.opcode == MOV
+                    && !operand.empty()
+                    && (std::isdigit(operand[0]) 
+                        || ((operand[0]=='-'||operand[0]=='+') 
+                            && operand.size()>1 
+                            && std::isdigit(operand[1])))) 
+                {
+                    operand = "$" + operand;
+                }
                 instr.operands.push_back(operand);
             }
             instructions.push_back(instr);
@@ -435,7 +409,7 @@ void Compiler::compile(const std::string& outputFile) {
     // Prepare the header
     BinaryHeader header;
     header.magic = 0x4D53414D; // "MASM"
-    header.version = VERSION;
+    header.version = 1;
     header.codeSize = actualCodeSize;
     header.dataSize = dataSegment.size();
     header.entryPoint = entryPointAddress; // Set the found entry point
@@ -464,13 +438,9 @@ void Compiler::compile(const std::string& outputFile) {
             for (const auto& operand : instr.operands) {
                 ResolvedOperand resolved = resolveOperand(operand, instr.opcode);
                 if (debugMode) std::cout << "[Debug][Compiler]     Operand Type: 0x" << std::hex << static_cast<int>(resolved.type) << ", Value: " << std::dec << resolved.value << " (0x" << std::hex << resolved.value << std::dec << ")\n";
-                int value_size = calculateOperandSize(operand);
                 out.put(static_cast<char>(resolved.type));
-                const char * value = reinterpret_cast<const char*>(&resolved.value);
-                for (int i=0; i<value_size; i++) {
-                    out.put(value[i]);
-                }
-                byteOffset += 1 + value_size;
+                out.write(reinterpret_cast<const char*>(&resolved.value), sizeof(resolved.value));
+                byteOffset += 1 + sizeof(resolved.value);
             }
             // Write end marker
             ResolvedOperand endMarker;
@@ -486,13 +456,9 @@ void Compiler::compile(const std::string& outputFile) {
             for (const auto& operand : instr.operands) {
                 ResolvedOperand resolved = resolveOperand(operand, instr.opcode);
                 if (debugMode) std::cout << "[Debug][Compiler]     Operand Type: 0x" << std::hex << static_cast<int>(resolved.type) << ", Value: " << std::dec << resolved.value << " (0x" << std::hex << resolved.value << std::dec << ")\n";
-                int value_size = calculateOperandSize(operand);
-                out.put(static_cast<char>(resolved.type) | (value_size << 4));
-                const char * value = reinterpret_cast<const char*>(&resolved.value);
-                for (int i=0; i<value_size; i++) {
-                    out.put(value[i]);
-                }
-                byteOffset += 1 + value_size;
+                out.put(static_cast<char>(resolved.type));
+                out.write(reinterpret_cast<const char*>(&resolved.value), sizeof(resolved.value));
+                byteOffset += 1 + sizeof(resolved.value);
             }
         }
     }
@@ -519,7 +485,12 @@ ResolvedOperand Compiler::resolveOperand(const std::string& operand, Opcode cont
                 throw std::runtime_error("Undefined label: " + operand);
             }
         } else if (operand[0] == '$') {
-            if (operand.length() > 1 && toupper(operand[1]) == 'R') { // Potential register address like $R1 or $RBX
+            if (dataLabels.count(operand)) {
+                // Data reference
+                result.type = OperandType::DATA_ADDRESS;
+                // Value is the offset within the data segment
+                result.value = dataLabels.at(operand);
+            } else if (operand.length() > 1 && operand[1] == 'R') { // Potential register address like $R1 or $RBX
                 std::string regName = operand.substr(1); // Extract potential register name (e.g., R1, RBX)
                 std::string upperRegName = regName;
                 std::transform(upperRegName.begin(), upperRegName.end(), upperRegName.begin(), ::toupper);
@@ -546,7 +517,8 @@ ResolvedOperand Compiler::resolveOperand(const std::string& operand, Opcode cont
                 for (char c : numStr) {
                     if (!std::isdigit(c) && c != '-' && c != '+') { isNumber = false; break; }
                 }
-                if (isNumber) {
+                if (isNumber &&
+                    (contextOpcode == OUT || contextOpcode == OUTSTR || contextOpcode == OUTCHAR || contextOpcode == COUT)) {
                     long long val = std::stoll(numStr);
                     if (val < 0 || val > INT_MAX) {
                         throw std::runtime_error("DATA_ADDRESS ($<number>) out of range: " + operand);
