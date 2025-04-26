@@ -13,6 +13,7 @@ set(SOURCES
         src/microasm_interpreter.cpp
         src/microasm_capi.cpp
         src/microasm_decoder.cpp
+        src/mni/strings/strings.cpp
 )
 
 # Create a static library

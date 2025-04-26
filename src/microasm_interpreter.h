@@ -38,8 +38,7 @@ private: // Private members
     int ip = 0;
     int sp;
     int bp;
-    bool zeroFlag = false;
-    bool signFlag = false;
+
     std::vector<std::string> cmdArgs;
     bool debugMode = false;
 
@@ -56,7 +55,8 @@ private: // Private members
 public: // Public methods including memory access for C API
     // Constructor
     Interpreter(int ramSize = 65536, const std::vector<std::string>& args = {}, bool debug = false);
-
+    bool zeroFlag = false;
+    bool signFlag = false;
     // Memory access helpers (already public)
     int readRamInt(int address);
     void writeRamInt(int address, int value);
