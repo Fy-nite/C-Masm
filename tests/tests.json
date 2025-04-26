@@ -1,0 +1,58 @@
+{
+    "tests": [
+        {
+            "name": "build masm",
+            "type": "BUILDING",
+            "id": 0,
+            "cmd": ["%tests%/build.sh"],
+            "result": [
+                {
+                    "err":"Make returned non 0 exit code. See Above",
+                    "check": "Texit_code",
+                    "args":[0]
+                }
+            ],
+            "define": {
+                "masm": "%tmp%/masm"
+            }
+        },
+        {
+            "name": "compile hello.masm",
+            "type": "COMPILING",
+            "id": 1,
+            "cmd": ["%masm%", "-c", "%data%/hello.masm", "%tmp%/hello.bin"],
+            "depends": [0],
+            "result": [
+                {
+                    "err":"Masm -c returned non 0 exit code. See Above",
+                    "check": "Texit_code",
+                    "args":[0]
+                },
+                {
+                    "err":"Masm byte code is wrong. See Below",
+                    "check": "Tfile",
+                    "args": ["%tmp%/hello.bin", "%data%/hello.expected"],
+                    "run": ["%masm%", "-u", "%tmp%/hello.bin"]
+                }
+            ]
+        },
+        {
+            "name": "run hello.masm",
+            "type": "RUNNING",
+            "id": 0,
+            "cmd": ["%masm%", "-i", "%tmp%/hello.bin"],
+            "result": [
+                {
+                    "err":"Masm returned non 0 exit code. See Above",
+                    "check": "Texit_code",
+                    "args":[0]
+                },
+                {
+                    "err":"Wrong code output",
+                    "check": "Tstdout",
+                    "args":["Hello, World!\n"]
+                }
+            ]
+        }
+    ]
+}
