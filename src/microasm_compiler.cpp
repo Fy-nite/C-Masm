@@ -107,10 +107,19 @@ int Compiler::calculateInstructionSize(const Instruction& instr) {
 }
 
 std::string Compiler::trim(const std::string& str) {
-    size_t first = str.find_first_not_of(' ');
-    if (first == std::string::npos) return "";
-    size_t last = str.find_last_not_of(' ');
-    return str.substr(first, last - first + 1);
+    int start = str.length();
+    int end = 0;
+
+    for (int i=0;i<str.length();i++) {
+        if (str[i] > 32 && str[i] != 127) {
+            if (i > end) {
+                end = i;
+            } else if (i < start) {
+                start = i;
+            }
+        }
+    }
+    return str.substr(start, start-end);
 }
 
 std::string Compiler::resolveIncludePath(const std::string& includePath) {
@@ -260,7 +269,6 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
     if (trimmedLine.empty() || trimmedLine[0] == ';') return; // Skip comments and empty lines
 
     if (debugMode) std::cout << "[Debug][Compiler] Parsing line " << lineNumber << ": " << trimmedLine << "\n";
-
     std::istringstream stream(trimmedLine);
     std::string token;
     stream >> token;
@@ -672,6 +680,7 @@ int microasm_compiler_main(int argc, char* argv[]) {
 
         std::cout << "Compilation successful: " << sourceFile << " -> " << outputFile << std::endl;
     } catch (const std::exception& e) {
+        
         std::cerr << "Compilation Error: " << e.what() << std::endl;
         return 1;
     }
