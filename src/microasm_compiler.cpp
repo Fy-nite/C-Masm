@@ -464,16 +464,18 @@ void Compiler::compile(const std::string& outputFile) {
             for (const auto& operand : instr.operands) {
                 ResolvedOperand resolved = resolveOperand(operand, instr.opcode);
                 if (debugMode) std::cout << "[Debug][Compiler]     Operand Type: 0x" << std::hex << static_cast<int>(resolved.type) << ", Value: " << std::dec << resolved.value << " (0x" << std::hex << resolved.value << std::dec << ")\n";
-                out.put(static_cast<char>(resolved.type));
-                int32_t value = static_cast<int32_t>(resolved.value);
-                out.write(reinterpret_cast<const char*>(&value), sizeof(int32_t));
-                byteOffset += 1 + sizeof(int32_t);
+                int value_size = calculateOperandSize(operand);
+                out.put(static_cast<char>(resolved.type) | (value_size << 4));
+                const char * value = reinterpret_cast<const char*>(&resolved.value);
+                for (int i=0; i<value_size; i++) {
+                    out.put(value[i]);
+                }
+                byteOffset += 1 + value_size;
             }
             // Write end marker: type=NONE, value=0
             out.put(static_cast<char>(OperandType::NONE));
             int32_t zero = 0;
-            out.write(reinterpret_cast<const char*>(&zero), sizeof(int32_t));
-            byteOffset += 1 + sizeof(int32_t);
+            byteOffset += 1;
 
         } else {
             // Write regular operands

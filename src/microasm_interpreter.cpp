@@ -56,6 +56,9 @@ Interpreter::Interpreter(int ramSize, const std::vector<std::string>& args, bool
 }
 
 int Interpreter::getOperandSize(char type) {
+    if (type == '\0') {
+        return 1;
+    }
     int ret =  type >> 4;
     if (ret == 0) ret = 4;
     return ret;
