@@ -88,17 +88,17 @@ int main(int argc, char* argv[]) {
 
     // --- Debug Flag Handling ---
     bool enableDebug = false;
-    // std::vector<char*> args_filtered;
+    std::vector<char*> args_filtered;
     // args_filtered.push_back(argv[0]); // Keep program name
 
-    // for (int i = 1; i < argc; ++i) {
-    //     std::string arg = argv[i];
-    //     if (arg == "-d" || arg == "--debug") {
-    //         enableDebug = true;
-    //     } else {
-    //         args_filtered.push_back(argv[i]);
-    //     }
-    // }
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "-d" || arg == "--debug") {
+            enableDebug = true;
+        } else {
+            args_filtered.push_back(argv[i]);
+        }
+    }
 
     // // Update argc and argv to the filtered list
     // argc = args_filtered.size();

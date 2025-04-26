@@ -30,7 +30,6 @@ class Compiler {
     std::unordered_map<std::string, int> labelMap;
     std::vector<Instruction> instructions; // Now knows what Instruction is
     std::vector<char> dataSegment;
-    std::unordered_map<std::string, int> dataLabels;
     int currentAddress = 0;
     int dataAddress = 0;
     bool debugMode = false;

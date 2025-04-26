@@ -77,6 +77,8 @@ int calculateOperandSize(std::string op) {
     }
     if (toupper(op2[0]) == 'R') {
         return 1;
+    } else if (op2[0] == '#') {
+        return 4;
     } else {
         return getmin(std::stoi(op2));
     }
@@ -316,7 +318,6 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
                  // If it still fails, throw the error
                  throw std::runtime_error("DB requires a quoted string (check quotes and content): [" + dataValue + "]");
              }
-             dataLabels[dataLabel] = dataAddress;
              // Handle escape sequences like \n (basic implementation)
              std::string processedValue;
              for (size_t i = 0; i < dataValue.length(); ++i) {
@@ -333,13 +334,20 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
                      processedValue += dataValue[i];
                  }
              }
-
+             std::string addr = dataLabel;
+             addr.erase(0, 1);
+             int addre = std::stoi(addr);
+             int size = dataValue.length();
+             dataSegment.push_back(addre & 0xFF);
+             dataSegment.push_back(addre >> 8);
+             dataSegment.push_back(size & 0xFF);
+             dataSegment.push_back(size >> 8);
              for(char c : processedValue) {
                  dataSegment.push_back(c);
              }
              dataSegment.push_back('\0'); // Null-terminate for convenience
              dataAddress += processedValue.length() + 1;
-             if (debugMode) std::cout << "[Debug][Compiler]   Defined data label '" << dataLabel << "' at data offset " << dataLabels[dataLabel] << " with value \"" << processedValue << "\"\n";
+             if (debugMode) std::cout << "[Debug][Compiler]   Defined data label '" << dataLabel << " with value \"" << processedValue << "\"\n";
 
         } else if (upperToken == "MNI") {
             Instruction instr;
@@ -456,9 +464,13 @@ void Compiler::compile(const std::string& outputFile) {
             for (const auto& operand : instr.operands) {
                 ResolvedOperand resolved = resolveOperand(operand, instr.opcode);
                 if (debugMode) std::cout << "[Debug][Compiler]     Operand Type: 0x" << std::hex << static_cast<int>(resolved.type) << ", Value: " << std::dec << resolved.value << " (0x" << std::hex << resolved.value << std::dec << ")\n";
+                int value_size = calculateOperandSize(operand);
                 out.put(static_cast<char>(resolved.type));
-                out.write(reinterpret_cast<const char*>(&resolved.value), sizeof(resolved.value));
-                byteOffset += 1 + sizeof(resolved.value);
+                const char * value = reinterpret_cast<const char*>(&resolved.value);
+                for (int i=0; i<value_size; i++) {
+                    out.put(value[i]);
+                }
+                byteOffset += 1 + value_size;
             }
             // Write end marker
             ResolvedOperand endMarker;
@@ -507,12 +519,7 @@ ResolvedOperand Compiler::resolveOperand(const std::string& operand, Opcode cont
                 throw std::runtime_error("Undefined label: " + operand);
             }
         } else if (operand[0] == '$') {
-            if (dataLabels.count(operand)) {
-                // Data reference
-                result.type = OperandType::DATA_ADDRESS;
-                // Value is the offset within the data segment
-                result.value = dataLabels.at(operand);
-            } else if (operand.length() > 1 && operand[1] == 'R') { // Potential register address like $R1 or $RBX
+            if (operand.length() > 1 && toupper(operand[1]) == 'R') { // Potential register address like $R1 or $RBX
                 std::string regName = operand.substr(1); // Extract potential register name (e.g., R1, RBX)
                 std::string upperRegName = regName;
                 std::transform(upperRegName.begin(), upperRegName.end(), upperRegName.begin(), ::toupper);

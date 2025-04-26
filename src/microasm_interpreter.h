@@ -35,7 +35,6 @@ public: // Public members needed by C API or main
 
 private: // Private members
     std::vector<uint8_t> bytecode_raw;
-    int dataSegmentBase;
     int ip = 0;
     int sp;
     int bp;

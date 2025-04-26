@@ -48,8 +48,6 @@ Interpreter::Interpreter(int ramSize, const std::vector<std::string>& args, bool
     bp = registers[6];
     // Set data segment base - let's put it in the middle for now
     // Ensure this doesn't collide with stack growing down!
-    dataSegmentBase = ramSize / 2;
-    if (dataSegmentBase < 0) dataSegmentBase = 0; // Handle tiny RAM sizes
 
     // Initialize MNI functions
     initializeMNIFunctions();
@@ -90,21 +88,26 @@ BytecodeOperand Interpreter::nextRawOperand() {
 int Interpreter::getValue(const BytecodeOperand& operand) {
     switch (operand.type) {
         case OperandType::REGISTER:
-        case OperandType::REGISTER_AS_ADDRESS: // For getValue, treat same as REGISTER (return content)
             if (operand.value < 0 || operand.value >= registers.size()) {
                 throw std::runtime_error("Invalid register index encountered: " + std::to_string(operand.value));
             }
             return registers[operand.value];
+        case OperandType::REGISTER_AS_ADDRESS: // For getValue, treat same as REGISTER (return content)
+            if (operand.value < 0 || operand.value >= registers.size()) {
+                throw std::runtime_error("Invalid register index encountered: " + std::to_string(operand.value));
+            }
+            
+            return ram[registers[operand.value]];
         case OperandType::IMMEDIATE:
         case OperandType::LABEL_ADDRESS: // Addresses are immediate values in bytecode
             return operand.value;
         case OperandType::DATA_ADDRESS:
             // Return the absolute RAM address (Base + Offset)
             // dataSegmentBase is now correctly set during loading
-            if (dataSegmentBase + operand.value < 0 || dataSegmentBase + operand.value >= ram.size()) {
-                 throw std::runtime_error("Data address out of RAM bounds: Base=" + std::to_string(dataSegmentBase) + ", Offset=" + std::to_string(operand.value));
+            if (operand.value < 0 || operand.value >= ram.size()) {
+                 throw std::runtime_error("Data address out of RAM bounds: Addr=" + std::to_string(operand.value));
             }
-            return dataSegmentBase + operand.value;
+            return operand.value;
         default:
             throw std::runtime_error("Cannot get value for unknown or invalid operand type: " + std::to_string(static_cast<int>(operand.type)));
     }
@@ -224,7 +227,7 @@ std::string Interpreter::formatOperandDebug(const BytecodeOperand& op) {
         case OperandType::REGISTER_AS_ADDRESS: ss << "($R" << op.value << ")"; break;
         case OperandType::IMMEDIATE: ss << "(Imm)"; break;
         case OperandType::LABEL_ADDRESS: ss << "(LblAddr)"; break;
-        case OperandType::DATA_ADDRESS: ss << "(DataAddr 0x" << std::hex << (dataSegmentBase + op.value) << std::dec << ")"; break;
+        case OperandType::DATA_ADDRESS: ss << "(DataAddr 0x" << std::hex << (op.value) << std::dec << ")"; break;
         default: ss << "(?)"; break;
     }
     return ss.str();
@@ -259,12 +262,22 @@ void Interpreter::load(const std::string& bytecodeFile) {
 
     // 4. Load Data Segment into RAM at dataSegmentBase
     if (header.dataSize > 0) {
-        if (dataSegmentBase + header.dataSize > ram.size()) {
-            throw std::runtime_error("RAM size (" + std::to_string(ram.size()) + ") too small for data segment (size " + std::to_string(header.dataSize) + " at base " + std::to_string(dataSegmentBase) + ")");
+        if (header.dataSize > ram.size()) {
+            throw std::runtime_error("RAM size (" + std::to_string(ram.size()) + ") too small for data segment (size " + std::to_string(header.dataSize) + ")");
         }
-        if (!in.read(&ram[dataSegmentBase], header.dataSize)) {
-             throw std::runtime_error("Failed to read data segment (expected " + std::to_string(header.dataSize) + " bytes)");
+        char* data = (char*)malloc(header.dataSize * sizeof(char));
+        char* tmp_data = data;
+        in.read(data, header.dataSize);
+        while (data < tmp_data+header.dataSize) {
+            int16_t addr = *(int16_t*)&data[0];
+            int16_t size = *(int16_t*)&data[2];
+            data += 4;
+            for (int i=0;i<size;i++) {
+                ram[addr+i] = data[i];
+            }
+            data += size;
         }
+        free((char*)tmp_data);
     }
 
     // Check if we read exactly the expected amount
@@ -286,7 +299,7 @@ void Interpreter::load(const std::string& bytecodeFile) {
                    << ", CodeSize: " << header.codeSize
                    << ", DataSize: " << header.dataSize
                    << ", EntryPoint: 0x" << std::hex << header.entryPoint << std::dec << "\n";
-         std::cout << "[Debug][Interpreter]   Data Segment loaded at RAM base: 0x" << std::hex << dataSegmentBase << std::dec << "\n";
+         std::cout << "[Debug][Interpreter]   Data Segment loaded" << "\n";
          std::cout << "[Debug][Interpreter]   IP set to entry point: 0x" << std::hex << ip << std::dec << "\n";
     }
 }
