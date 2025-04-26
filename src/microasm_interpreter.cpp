@@ -477,7 +477,7 @@ void Interpreter::execute() {
                     if(debugMode) std::cout << "[Debug][Interpreter]     Popped value " << val << " into R" << dest_reg << ". New SP: 0x" << std::hex << sp << std::dec << "\n";
                     break;
                 }
-
+            
                 // I/O Operations
                 case OUT: {
                     BytecodeOperand op_port = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Port): " << formatOperandDebug(op_port) << "\n";
@@ -593,7 +593,7 @@ void Interpreter::execute() {
                 }
 
                 // Program Control
-                case HLT: { if(debugMode) std::cout << "[Debug][Interpreter] HLT encountered.\n"; std::cout << "HLT encountered. Execution finished." << std::endl; return; } // Halt execution
+                case HLT: { if(debugMode) std::cout << "[Debug][Interpreter] HLT encountered.\n";  return; } // Halt execution
                 case ARGC: {
                     BytecodeOperand op_dest = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Dest): " << formatOperandDebug(op_dest) << "\n";
                     registers[getRegisterIndex(op_dest)] = cmdArgs.size(); // Use cmdArgs member
@@ -837,7 +837,7 @@ int microasm_interpreter_main(int argc, char* argv[]) {
         // std::cout << "Execution finished successfully!" << std::endl; // HLT provides its own message
     } catch (const std::exception& e) {
         // Error already logged in execute() or load()
-        // std::cerr << "Execution failed: " << e.what() << std::endl;
+        std::cerr << "Execution failed: " << e.what() << std::endl;
         return 1;
     }
 
