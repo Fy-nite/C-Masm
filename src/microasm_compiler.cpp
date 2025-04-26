@@ -90,8 +90,10 @@ int Compiler::calculateInstructionSize(const Instruction& instr) {
     if (instr.opcode == MNI) {
         int size = 1; // Opcode
         size += instr.mniFunctionName.length() + 1; // Name + Null terminator
-        size += instr.operands.size() * (1 + sizeof(int)); // Operands (Type + Value)
-        size += 1 + sizeof(int); // End marker (Type + Value)
+        for (auto& op : instr.operands) {
+            size += calculateOperandSize(op)+1;
+        }
+        size += 1; // End marker (Type + Value)
         return size;
     } else {
         // Regular instruction size
@@ -337,7 +339,7 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
              std::string addr = dataLabel;
              addr.erase(0, 1);
              int addre = std::stoi(addr);
-             int size = dataValue.length() + 1;
+             int size = processedValue.length() + 1;
              dataSegment.push_back(addre & 0xFF);
              dataSegment.push_back(addre >> 8);
              dataSegment.push_back(size & 0xFF);

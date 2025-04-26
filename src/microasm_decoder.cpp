@@ -138,6 +138,9 @@ int getOperandCount(Opcode opcode) {
 }
 
 int getOperandSize(char type) {
+    if (type == '\0') {
+        return 0;
+    }
     int ret =  type >> 4;
     if (ret == 0) ret = 4;
     return ret;
@@ -289,8 +292,9 @@ int decoder_main(int argc, char* argv[]) {
                 if (opcode == MNI) {
                     mniFunc = readString(code, tempIp);
                     int size = getOperandSize(code[tempIp]);
-                    while (tempIp + 1 + size <= code.size()) {
-                        OperandType t = static_cast<OperandType>(code[tempIp++]);
+                    // while (tempIp + 1 + size <= code.size()) {
+                    while (true) {
+                        OperandType t = static_cast<OperandType>(code[tempIp++] & 15);
                         int v = *reinterpret_cast<const int*>(&code[tempIp]);
                         if (size != 4) v &= (1 << (8*size))-1;
                         tempIp += size;

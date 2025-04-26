@@ -783,7 +783,6 @@ void Interpreter::execute() {
                         if(debugMode) std::cout << "[Debug][Interpreter]     MNI Arg : " << formatOperandDebug(arg) << "\n";
                         mniArgs.push_back(arg);
                     }
-
                     if (mniRegistry.count(functionName)) {
                         mniRegistry[functionName](*this, mniArgs); // Call the registered function
                     } else {
