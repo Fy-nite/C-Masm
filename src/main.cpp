@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
     // --- Debug Flag Handling ---
     bool enableDebug = false;
     std::vector<char*> args_filtered;
-    args_filtered.push_back(argv[0]); // Keep program name
+    // args_filtered.push_back(argv[0]); // Keep program name
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -100,8 +100,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    argc = args_filtered.size();
-    argv = args_filtered.data();
+    // // Update argc and argv to the filtered list
+    // argc = args_filtered.size();
+    // argv = args_filtered.data();
     // --- End Debug Flag Handling ---
 
 

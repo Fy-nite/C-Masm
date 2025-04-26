@@ -35,7 +35,6 @@ public: // Public members needed by C API or main
 
 private: // Private members
     std::vector<uint8_t> bytecode_raw;
-    int dataSegmentBase;
     int ip = 0;
     int sp;
     int bp;
@@ -52,6 +51,7 @@ private: // Private members
     std::string readBytecodeString();
     void initializeMNIFunctions();
     std::string formatOperandDebug(const BytecodeOperand& op);
+    int getOperandSize(char type);
 
 public: // Public methods including memory access for C API
     // Constructor

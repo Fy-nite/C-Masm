@@ -20,7 +20,7 @@ enum OperandType {
 };
 
 enum Opcode {
-    MOV = 0x00, ADD, SUB, MUL, DIV, INC,
+    MOV = 0x01, ADD, SUB, MUL, DIV, INC,
     JMP, CMP, JE, JL, CALL, RET,
     PUSH, POP,
     OUT, COUT, OUTSTR, OUTCHAR,
@@ -137,6 +137,12 @@ int getOperandCount(Opcode opcode) {
     }
 }
 
+int getOperandSize(char type) {
+    int ret =  type >> 4;
+    if (ret == 0) ret = 4;
+    return ret;
+}
+
 // ANSI color codes
 #define CLR_RESET   "\033[0m"
 #define CLR_OPCODE  "\033[1;36m"
@@ -145,6 +151,48 @@ int getOperandCount(Opcode opcode) {
 #define CLR_HEX     "\033[1;35m"
 #define CLR_COMMENT "\033[1;90m"
 #define CLR_ERROR   "\033[1;31m"
+
+char* repr(char* str) {
+    int len = 0;
+    char i = str[0];
+    while (i!='\0') {
+        len++;
+        i = str[len];
+    }
+
+    char* ret = (char*)malloc(len*2+1);
+    char* tmp = ret;
+    for (int i=0;i<len;i++) {
+        switch (str[i])
+        {
+            case '\n':
+                tmp[0] = '\\';
+                tmp[1] = 'n';
+                tmp += 2;
+                break;
+            case '\\':
+                tmp[0] = '\\';
+                tmp[1] = '\\';
+                tmp += 2;
+                break;
+            case '\t':
+                tmp[0] = '\\';
+                tmp[1] = 't';
+                tmp += 2;
+                break;
+            case '"':
+                tmp[0] = '\\';
+                tmp[1] = '"';
+                tmp += 2;
+                break;
+            
+            default:
+                tmp[0] = str[i];
+                tmp++;
+        }
+    }
+    return ret;
+}
 
 // Always define as decoder_main when included in the main project
 int decoder_main(int argc, char* argv[]) {
@@ -204,21 +252,25 @@ int decoder_main(int argc, char* argv[]) {
                 int opCount = getOperandCount(opcode);
                 if (opcode == MNI) {
                     mniFunc = readString(code, tempIp);
-                    while (tempIp + 1 + 4 <= code.size()) {
+                    int size = getOperandSize(code[tempIp]);
+                    while (tempIp + 1 + size <= code.size()) {
                         OperandType t = static_cast<OperandType>(code[tempIp++]);
                         int v = *reinterpret_cast<const int*>(&code[tempIp]);
-                        tempIp += 4;
+                        if (size != 4) v &= (1 << (8*size))-1;
+                        tempIp += size;
                         if (t == NONE) break;
                         operands.emplace_back(t, v);
                         if (t == DATA_ADDRESS) referencedDataOffsets.insert(v);
                     }
                 } else if (opCount >= 0) {
                     for (int i = 0; i < opCount; ++i) {
-                        if (tempIp + 1 + 4 > code.size())
+                        int size = getOperandSize(code[tempIp]);
+                        if (tempIp + 1 + size > code.size())
                             throw std::runtime_error("Unexpected end of code segment while reading operand");
-                        OperandType t = static_cast<OperandType>(code[tempIp++]);
+                        OperandType t = static_cast<OperandType>(code[tempIp++] & 0b1111);
                         int v = *reinterpret_cast<const int*>(&code[tempIp]);
-                        tempIp += 4;
+                        if (size != 4) v = v & (1<<(8*(size)))-1;
+                        tempIp += size;
                         operands.emplace_back(t, v);
                         if (t == DATA_ADDRESS) referencedDataOffsets.insert(v);
                     }
@@ -259,42 +311,52 @@ int decoder_main(int argc, char* argv[]) {
         std::cout << "--- Data Segment (Size: " << header.dataSize << ") ---" << std::endl;
         std::vector<char> data(header.dataSize);
         std::vector<bool> processed(header.dataSize, false);
-        if (header.dataSize > 0 && !in.read(data.data(), header.dataSize))
-            throw std::runtime_error("Failed to read data segment.");
-
-        for (uint32_t i = 0; i < header.dataSize;) {
-            if (processed[i]) { ++i; continue; }
-            bool isRef = referencedDataOffsets.count(i);
-            std::string s;
-            bool isStr = false;
-            uint32_t end = i;
-            if (isRef) {
-                uint32_t k = i;
-                bool possible = true;
-                while (k < header.dataSize) {
-                    char c = data[k];
-                    if (c == '\0') { end = k; isStr = possible; break; }
-                    if (!std::isprint((unsigned char)c) && c != '\n' && c != '\t') possible = false;
-                    s += c; ++k;
-                }
-                if (k == header.dataSize && data[k-1] != '\0') isStr = false;
-            }
-            if (isStr) {
-                std::cout << CLR_COMMENT << "; Referenced Data (String)" << CLR_RESET << std::endl;
-                std::cout << "DB $" << i << " \"" << escapeString(s) << "\"" << std::endl;
-                for (uint32_t p = i; p <= end; ++p) processed[p] = true;
-                i = end + 1;
-            } else {
-                if (isRef) std::cout << CLR_COMMENT << "; Referenced Data (Byte)" << CLR_RESET << std::endl;
-                else std::cout << CLR_COMMENT << "; Unreferenced Data (Byte)" << CLR_RESET << std::endl;
-                std::cout << "DB $" << i << " 0x"
-                          << std::setw(2) << std::setfill('0') << std::hex
-                          << (int)(unsigned char)data[i]
-                          << std::dec << std::endl;
-                processed[i] = true;
-                ++i;
-            }
+        char* mem_data = (char*)malloc(header.dataSize * sizeof(char));
+        char* tmp_data = mem_data;
+        in.read(mem_data, header.dataSize);
+        while (mem_data < tmp_data+header.dataSize) {
+            int16_t addr = *(int16_t*)&mem_data[0];
+            int16_t size = *(int16_t*)&mem_data[2];
+            mem_data += 4;
+            std::string data_string;
+            std::cout << "DB $" << addr << " \"" << repr(mem_data) << "\"\n";
+            mem_data += size;
         }
+        free((char*)tmp_data);
+
+        // for (uint32_t i = 0; i < header.dataSize;) {
+        //     if (processed[i]) { ++i; continue; }
+        //     bool isRef = referencedDataOffsets.count(i);
+        //     std::string s;
+        //     bool isStr = false;
+        //     uint32_t end = i;
+        //     if (isRef) {
+        //         uint32_t k = i;
+        //         bool possible = true;
+        //         while (k < header.dataSize) {
+        //             char c = data[k];
+        //             if (c == '\0') { end = k; isStr = possible; break; }
+        //             if (!std::isprint((unsigned char)c) && c != '\n' && c != '\t') possible = false;
+        //             s += c; ++k;
+        //         }
+        //         if (k == header.dataSize && data[k-1] != '\0') isStr = false;
+        //     }
+        //     if (isStr) {
+        //         std::cout << CLR_COMMENT << "; Referenced Data (String)" << CLR_RESET << std::endl;
+        //         std::cout << "DB $" << i << " \"" << escapeString(s) << "\"" << std::endl;
+        //         for (uint32_t p = i; p <= end; ++p) processed[p] = true;
+        //         i = end + 1;
+        //     } else {
+        //         if (isRef) std::cout << CLR_COMMENT << "; Referenced Data (Byte)" << CLR_RESET << std::endl;
+        //         else std::cout << CLR_COMMENT << "; Unreferenced Data (Byte)" << CLR_RESET << std::endl;
+        //         std::cout << "DB $" << i << " 0x"
+        //                   << std::setw(2) << std::setfill('0') << std::hex
+        //                   << (int)(unsigned char)data[i]
+        //                   << std::dec << std::endl;
+        //         processed[i] = true;
+        //         ++i;
+        //     }
+        // }
         if (header.dataSize == 0) std::cout << "(Empty)" << std::endl;
         std::cout << "--------------" << std::endl;
     } catch (const std::exception& e) {
