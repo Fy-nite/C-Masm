@@ -13,7 +13,7 @@
 #include <functional>
 #include <iomanip>
 #include <sstream> // Add this header for std::stringstream
-
+#define VERSION 2
 // Include own header FIRST
 #include "microasm_interpreter.h"
 
@@ -57,23 +57,32 @@ Interpreter::Interpreter(int ramSize, const std::vector<std::string>& args, bool
     if (debugMode) std::cout << "[Debug][Interpreter] Debug mode enabled. RAM Size: " << ramSize << "\n";
 }
 
+int Interpreter::getOperandSize(char type) {
+    int ret =  type >> 4;
+    if (ret == 0) ret = 4;
+    return ret;
+}
+
+
 BytecodeOperand Interpreter::nextRawOperand() {
-    if (ip + 1 + sizeof(int) > bytecode_raw.size()) { // Check size for type byte + value int
+    int size = getOperandSize(bytecode_raw[ip]);
+    if (ip + 1 + size > bytecode_raw.size()) { // Check size for type byte + value int
          throw std::runtime_error("Unexpected end of bytecode reading typed operand (IP: " + std::to_string(ip) + ", CodeSize: " + std::to_string(bytecode_raw.size()) + ")");
     }
     BytecodeOperand operand;
-    operand.type = static_cast<OperandType>(bytecode_raw[ip++]);
+    operand.type = static_cast<OperandType>(bytecode_raw[ip++] & 15);
     // Handle NONE type immediately if needed (though it shouldn't be read here usually)
     if (operand.type == OperandType::NONE) {
          operand.value = 0; // No value associated
          // ip adjustment might depend on how NONE is encoded (e.g., if it has a dummy value)
          // Assuming it's just the type byte based on compiler code for MNI marker
     } else {
-         if (ip + sizeof(int) > bytecode_raw.size()) {
+         if (ip + size > bytecode_raw.size()) {
              throw std::runtime_error("Unexpected end of bytecode reading operand value (IP: " + std::to_string(ip) + ")");
          }
          operand.value = *reinterpret_cast<const int*>(&bytecode_raw[ip]);
-         ip += sizeof(int);
+         if (size != 4) operand.value &= (1 << (8*size))-1;
+         ip += size;
     }
     return operand;
 }
@@ -236,8 +245,8 @@ void Interpreter::load(const std::string& bytecodeFile) {
         throw std::runtime_error("Invalid magic number in bytecode file. Not a MASM binary.");
     }
     // Could add version checks here too 
-    if (header.version != 1) {
-        throw std::runtime_error("Unsupported bytecode version: " + std::to_string(header.version) + " (Supported version: 1)");
+    if (header.version > VERSION) {
+        throw std::runtime_error("Unsupported bytecode version: " + std::to_string(header.version) + " (Supported version: 2)");
     }
 
     // 3. Load Code Segment into bytecode_raw
@@ -807,7 +816,7 @@ int microasm_interpreter_main(int argc, char* argv[]) {
         // std::cout << "Execution finished successfully!" << std::endl; // HLT provides its own message
     } catch (const std::exception& e) {
         // Error already logged in execute() or load()
-        // std::cerr << "Execution failed: " << e.what() << std::endl;
+        std::cerr << "Execution failed: " << e.what() << std::endl;
         return 1;
     }
 

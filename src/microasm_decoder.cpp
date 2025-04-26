@@ -214,7 +214,7 @@ int decoder_main(int argc, char* argv[]) {
                     while (tempIp + 1 + size <= code.size()) {
                         OperandType t = static_cast<OperandType>(code[tempIp++]);
                         int v = *reinterpret_cast<const int*>(&code[tempIp]);
-                        v &= (1 << (8*size))-1;
+                        if (size != 4) v &= (1 << (8*size))-1;
                         tempIp += size;
                         if (t == NONE) break;
                         operands.emplace_back(t, v);
