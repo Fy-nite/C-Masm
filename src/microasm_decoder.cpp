@@ -121,10 +121,10 @@ void printHexBytes(const std::vector<uint8_t>& vec, size_t start, size_t end) {
 
 int getOperandCount(Opcode opcode) {
     switch (opcode) {
-        case MOV: case ADD: case SUB: case MUL: case DIV: case CMP: case AND: case OR: case XOR: case SHL: case SHR: case MOVADDR: case MOVTO:
+        case MOV: case ADD: case SUB: case MUL: case DIV: case CMP: case AND: case OR: case XOR: case SHL: case SHR: case MOVADDR:
         case GETARG: case COPY: case FILL: case CMP_MEM: case OUT: case COUT: case OUTCHAR:
             return 2;
-        case OUTSTR:
+        case OUTSTR: case MOVTO:
             return 3;
         case INC: case JMP: case JE: case JL: case CALL: case PUSH: case POP: case JNE: case JG: case JLE: case JGE: case ENTER: case ARGC: case IN:
             return 1;

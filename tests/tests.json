@@ -39,7 +39,8 @@
         {
             "name": "run hello.masm",
             "type": "RUNNING",
-            "id": 0,
+            "id": 2,
+            "depends": [1],
             "cmd": ["%masm%", "-i", "%tmp%/hello.bin"],
             "result": [
                 {
@@ -53,6 +54,48 @@
                     "args":["Hello, World!\n"]
                 }
             ]
+        },
+        {
+            "name": "compile mem.masm",
+            "type": "COMPILING",
+            "id": 3,
+            "cmd": ["%masm%", "-c", "%data%/mem.masm", "%tmp%/mem.bin"],
+            "depends": [0],
+            "result": [
+                {
+                    "err":"Masm -c returned non 0 exit code. See Above",
+                    "check": "Texit_code",
+                    "args":[0]
+                },
+                {
+                    "err":"Masm byte code is wrong. See Below",
+                    "check": "Tfile",
+                    "args": ["%tmp%/mem.bin", "%data%/mem.expected"],
+                    "run": ["%masm%", "-u", "%tmp%/mem.bin"]
+                }
+            ]
+        },
+        {
+            "name": "run mem.masm",
+            "type": "RUNNING",
+            "id": 4,
+            "depends": [3],
+            "cmd": ["%masm%", "-i", "%tmp%/mem.bin"],
+            "result": [
+                {
+                    "err":"Masm returned non 0 exit code. See Above",
+                    "check": "Texit_code",
+                    "args":[0]
+                },
+                {
+                    "err":"Wrong prgm output: expected: 10, got %stdout%",
+                    "check": "Tstdout",
+                    "args":["10"]
+                }
+            ]
+        },
+        {
+            "macro": ["compile_and_run", "mem"]
         }
     ]
 }

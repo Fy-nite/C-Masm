@@ -110,7 +110,7 @@ int Interpreter::getValue(const BytecodeOperand& operand) {
             if (operand.value < 0 || operand.value >= ram.size()) {
                  throw std::runtime_error("Data address out of RAM bounds: Addr=" + std::to_string(operand.value));
             }
-            return operand.value;
+            return ram[operand.value];
         default:
             throw std::runtime_error("Cannot get value for unknown or invalid operand type: " + std::to_string(static_cast<int>(operand.type)));
     }
