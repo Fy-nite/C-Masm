@@ -79,6 +79,7 @@ Thumbs.db
 *.mas
 *.obj
 *.bin
+*.dbg
 masm
 masm.exe
 masm.*
