@@ -84,5 +84,6 @@ masm
 masm.exe
 masm.*
 
-# tests
+# code files that should be allowed
 !tests/*/*
+!examples/*/*
