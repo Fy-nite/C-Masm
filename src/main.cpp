@@ -78,11 +78,11 @@ int main(int argc, char* argv[]) {
             "Options:",
             "  -d, --debug  Enable debug mode.",
             "Examples:",
-            "  microasm -c example.masm",
-            "  microasm -i example.masm",
-            "  microasm -i example.bin"
+            "  masm -c example.masm",
+            "  masm -i example.masm",
+            "  masm -i example.bin"
         };
-        drawAsciiBox("MicroASM Usage", usageContent);
+        drawAsciiBox("C-Masm Usage", usageContent);
         return 1;
     }
 
