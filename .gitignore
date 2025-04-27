@@ -86,4 +86,4 @@ masm.*
 
 # code files that should be allowed
 !tests/*/*
-!examples/*/*
+!examples/*
