@@ -209,7 +209,7 @@ int main(int argc, char* argv[]) {
              buffer << fileStream.rdbuf();
              fileStream.close();
 
-            compiler.parse(buffer.str());
+            compiler.parse(buffer.str(), "");
             compiler.compile(tempBinary);
 
             if (enableDebug) std::cout << "[Debug] Compilation successful.\n";

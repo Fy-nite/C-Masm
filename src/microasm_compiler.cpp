@@ -106,20 +106,26 @@ int Compiler::calculateInstructionSize(const Instruction& instr) {
     }
 }
 
-std::string Compiler::trim(const std::string& str) {
-    int start = str.length();
-    int end = 0;
-
+std::string Compiler::trim(const std::string& instr) {
+    std::string str = instr;
     for (int i=0;i<str.length();i++) {
-        if (str[i] > 32 && str[i] != 127) {
-            if (i > end) {
-                end = i;
-            } else if (i < start) {
-                start = i;
-            }
+        if (str[i] == ';') {
+            str = str.substr(0, i);
+            break;
         }
     }
-    return str.substr(start, start-end);
+    // Python str.strip function modified for masm
+    int i = 0;
+    while (i < str.length() && !(str[i] > 32 && str[i] != 127)) {
+        i++;
+    }
+
+    int j = str.length();
+    do {
+        j--;
+    } while (j >= i && !(str[i] > 32 && str[i] != 127));
+    j++;
+    return str.substr(i, j-i);
 }
 
 std::string Compiler::resolveIncludePath(const std::string& includePath) {
@@ -250,7 +256,7 @@ void Compiler::parseFile(const std::string& filePath) {
     currentFileDir = previousFileDir;
 }
 
-void Compiler::parse(const std::string& source) {
+void Compiler::parse(const std::string& source, const std::string& debug_file) {
     std::istringstream stream(source);
     std::string line;
     int lineNumber = 0; // Track line number
@@ -262,6 +268,14 @@ void Compiler::parse(const std::string& source) {
             throw std::runtime_error("Error at line " + std::to_string(lineNumber) + ": " + e.what());
         }
     }
+    std::ofstream df(debug_file);
+    for (const auto& pair : labelMap) {
+        std::string lbl = pair.first;
+        int addr = pair.second;
+        df.write(lbl.c_str(), lbl.length() + 1);
+        df.write(reinterpret_cast<const char*>(&addr), sizeof(addr));
+    }
+    df.close();
 }
 
 void Compiler::parseLine(const std::string& line, int lineNumber) {
@@ -637,6 +651,7 @@ int microasm_compiler_main(int argc, char* argv[]) {
     // --- Argument Parsing for Standalone Compiler ---
     std::string sourceFile;
     std::string outputFile;
+    std::string debugFile;
     bool enableDebug = false;
     std::vector<char*> filtered_args; // Store non-debug args for potential future use
 
@@ -651,6 +666,9 @@ int microasm_compiler_main(int argc, char* argv[]) {
         } else if (outputFile.empty()) {
             outputFile = arg;
             filtered_args.push_back(argv[i]);
+        } else if (debugFile.empty()) {
+            debugFile = arg;
+            filtered_args.push_back(argv[i]);
         } else {
             // Handle extra arguments if necessary, or ignore/error
              filtered_args.push_back(argv[i]);
@@ -658,7 +676,7 @@ int microasm_compiler_main(int argc, char* argv[]) {
     }
 
     if (sourceFile.empty() || outputFile.empty()) {
-         std::cerr << "Compiler Usage: <source.masm> <output.bin> [-d|--debug]" << std::endl;
+         std::cerr << "Compiler Usage: <source.masm> <output.bin> [debug.masmd] [-d|--debug]" << std::endl;
          return 1;
     }
     // --- End Argument Parsing ---
@@ -675,7 +693,7 @@ int microasm_compiler_main(int argc, char* argv[]) {
 
         Compiler compiler;
         compiler.setDebugMode(enableDebug); // Set debug mode
-        compiler.parse(buffer.str());       // Parse content
+        compiler.parse(buffer.str(), debugFile);       // Parse content
         compiler.compile(outputFile);       // Compile to output
 
         std::cout << "Compilation successful: " << sourceFile << " -> " << outputFile << std::endl;

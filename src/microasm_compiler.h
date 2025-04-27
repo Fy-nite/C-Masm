@@ -51,7 +51,7 @@ class Compiler {
 
 public:
     void setDebugMode(bool enabled);
-    void parse(const std::string& source);
+    void parse(const std::string& source, const std::string& debug_file);
     void compile(const std::string& outputFile);
 };
 
