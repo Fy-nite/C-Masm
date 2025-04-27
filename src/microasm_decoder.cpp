@@ -8,6 +8,7 @@
 #include <sstream>
 #include <cstdint>
 #include <cctype>
+#include <cstring>
 
 // --- Shared enums/types (should match interpreter/compiler) ---
 enum OperandType {
@@ -42,6 +43,7 @@ struct BinaryHeader {
     uint16_t reserved = 0;
     uint32_t codeSize = 0;
     uint32_t dataSize = 0;
+    uint32_t dbgSize = 0;
     uint32_t entryPoint = 0;
 };
 #pragma pack(pop)
@@ -200,14 +202,14 @@ char* repr(char* str) {
 template< typename T >
 std::string int_to_hex( T i )
 {
-  std::stringstream stream;
-  stream << "0x" 
-         << std::setfill ('0') << std::setw(sizeof(T)*2) 
-         << std::hex << i;
-  return stream.str();
+    std::stringstream stream;
+    stream << "0x" 
+            << std::setfill ('0') << std::setw(sizeof(T)*2) 
+            << std::hex << i;
+    return stream.str();
 }
 
-bool contains(int line, std::vector<int> labels, std::vector<std::pair<int, int>> addr_to_line, int* label_i) {
+bool contains(int line, std::vector<int> labels, std::unordered_map<int, int> addr_to_line, int* label_i) {
     for (int i=0;i<labels.size();i++) {
         int lbl = labels[i];
         for (auto& pair : addr_to_line) {
@@ -235,7 +237,7 @@ int decoder_main(int argc, char* argv[]) {
     }
 
     std::vector<std::string> instructions;
-    std::vector<std::pair<int, int>> addr_to_line;
+    std::unordered_map<int, int> addr_to_line;
     std::vector<int> labels;
     int entry_line;
 
@@ -253,8 +255,26 @@ int decoder_main(int argc, char* argv[]) {
         std::cout << "Version:    " << header.version << std::endl;
         std::cout << "Code Size:  " << header.codeSize << " bytes" << std::endl;
         std::cout << "Data Size:  " << header.dataSize << " bytes" << std::endl;
+        std::cout << "Dbg  Size:  " << header.dbgSize << " bytes" << std::endl;
         std::cout << "Entry Point:" << CLR_HEX << header.entryPoint << CLR_RESET << " (offset)" << std::endl;
         std::cout << "--------------" << std::endl << std::endl;
+
+        std::unordered_map<int, std::string> lbls;
+        char* dbg = (char*)malloc(header.dbgSize);
+        char* dbg_og = dbg;
+
+        in.seekg(sizeof(BinaryHeader) + header.codeSize + header.dataSize);
+        in.read((char*)dbg, header.dbgSize);
+        in.seekg(sizeof(BinaryHeader));
+
+        while (dbg < dbg_og + header.dbgSize) {
+            std::string str = dbg;
+            dbg += (strlen(dbg) + 1);
+            int addr = *(int*)dbg;
+            dbg += sizeof(int);
+            lbls[addr] = str;
+        }
+        free(dbg_og);
 
         std::vector<uint8_t> code(header.codeSize);
         if (header.codeSize > 0 && !in.read(reinterpret_cast<char*>(code.data()), header.codeSize))
@@ -262,8 +282,8 @@ int decoder_main(int argc, char* argv[]) {
 
         std::set<uint32_t> referencedDataOffsets;
         std::cout << "--- Code Segment (Size: " << header.codeSize << ") ---" << std::endl;
-        std::cout << "Offset  | Bytes        | Disassembly" << std::endl;
-        std::cout << "--------|--------------|--------------------------------" << std::endl;
+        std::cout << "Offset  | Bytes                          | Disassembly" << std::endl;
+        std::cout << "--------|--------------------------------|--------------------------------" << std::endl;
 
         size_t ip = 0;
         int line = 0;
@@ -272,7 +292,7 @@ int decoder_main(int argc, char* argv[]) {
             if (ip == header.entryPoint) {
                 entry_line = line;
             }
-            addr_to_line.push_back(std::pair(ip, line));
+            addr_to_line[ip] = line;
             size_t startIp = ip;
             uint8_t opcodeByte = code[ip++];
             Opcode opcode = static_cast<Opcode>(opcodeByte);
@@ -322,11 +342,24 @@ int decoder_main(int argc, char* argv[]) {
                 unknown = true;
             }
 
+            if (lbls.count(startIp)) {
+                std::cout << CLR_OFFSET 
+                            << std::setw(7) << std::setfill('0') << startIp
+                            << CLR_RESET << " |                                | "
+                            << std::endl;
+                std::cout << CLR_OFFSET 
+                            << std::setw(7) << std::setfill('0') << startIp
+                            << CLR_RESET << " |                                | "
+                            << CLR_OPCODE << "lbl " << CLR_RESET
+                            << CLR_OPERAND << lbls[startIp]
+                            << std::endl;
+            }
+
             size_t endIp = tempIp;
             std::cout << CLR_OFFSET << std::setw(7) << std::setfill('0') << startIp << CLR_RESET << " | ";
             std::cout << CLR_HEX;
             printHexBytes(code, startIp, endIp);
-            std::cout << CLR_RESET << std::setw(12 - 3 * (endIp - startIp)) << " | ";
+            std::cout << CLR_RESET << std::setfill(' ') << std::setw(33 - (3 * (endIp - startIp))) << " | ";
 
             // Colorize disassembly
             if (opcode == MNI) {
@@ -335,9 +368,12 @@ int decoder_main(int argc, char* argv[]) {
                 for (auto& op : operands) {
                     std::string operand = formatOperand(op.first, op.second);
                     if (op.first == LABEL_ADDRESS) {
-                        op_str += " #label_" + std::to_string(label_i++);
+                        if (header.dbgSize != 0) {
+                            operand += " " + lbls.at(op.second);
+                        } else
+                            operand += " #" + std::to_string(op.second);
                     } else {
-                        op_str += " " + operand;
+                        operand += " " + formatOperand(op.first, op.second);;
                     }
                     std::cout << " " << CLR_OPERAND << formatOperand(op.first, op.second) << CLR_RESET;
                 }
@@ -347,16 +383,17 @@ int decoder_main(int argc, char* argv[]) {
                 std::string op_str = opcodeToString.at(opcode);
                 std::cout << CLR_OPCODE << op_str << CLR_RESET;
                 for (auto& op : operands) {
-                    std::string operand = formatOperand(op.first, op.second);
+                    std::string operand;
                     if (op.first == LABEL_ADDRESS) {
-                        if (op.second == header.entryPoint)
-                            op_str += " #main";
-                        else 
-                            op_str += " #label_" + std::to_string(label_i++);
+                        if (header.dbgSize != 0) {
+                            operand += " " + lbls.at(op.second);
+                        } else
+                            operand += " #" + std::to_string(op.second);
                     } else {
-                        op_str += " " + operand;
+                        operand += " " + formatOperand(op.first, op.second);;
                     }
-                    std::cout << " " << CLR_OPERAND << operand << CLR_RESET;
+                    std::cout << CLR_OPERAND << operand << CLR_RESET;
+                    op_str += operand;
                 }
                 instructions.push_back(op_str);
                 std::cout << std::endl;
@@ -369,7 +406,7 @@ int decoder_main(int argc, char* argv[]) {
             ip = endIp;
             line++;
         }
-        std::cout << "--------|--------------|--------------------------------" << std::endl << std::endl;
+        std::cout << "--------|--------------------------------|--------------------------------" << std::endl << std::endl;
 
         // Data segment (colorize comments)
         std::cout << "--- Data Segment (Size: " << header.dataSize << ") ---" << std::endl;
@@ -430,7 +467,13 @@ int decoder_main(int argc, char* argv[]) {
             std::string decompiled;
             for (int i=0;i<instructions.size();i++) {
                 std::string ins = instructions[i];
-                if (i==entry_line) {
+                if (header.dbgSize != 0) {
+                    for (auto& l : lbls) {
+                        if (addr_to_line[l.first]==i) {
+                            decompiled += "\nlbl " + l.second + "\n";
+                        }
+                    }
+                } else if (i==entry_line) {
                     decompiled += "\nlbl main\n";
                 } else if (contains(i, labels, addr_to_line, &label_i)) {
                     decompiled += "\nlbl label_" + std::to_string(label_i) + "\n";

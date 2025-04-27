@@ -199,7 +199,7 @@ int main(int argc, char* argv[]) {
             // --- Compile Step ---
             if (enableDebug) std::cout << "[Debug] Compiling " << sourceFile << " to " << tempBinary << "\n";
             Compiler compiler;
-            compiler.setDebugMode(enableDebug); // Pass debug flag to compiler class
+            compiler.setFlags(enableDebug); // Pass debug flag to compiler class
 
              std::ifstream fileStream(sourceFile);
              if (!fileStream) {
@@ -209,7 +209,7 @@ int main(int argc, char* argv[]) {
              buffer << fileStream.rdbuf();
              fileStream.close();
 
-            compiler.parse(buffer.str(), "");
+            compiler.parse(buffer.str());
             compiler.compile(tempBinary);
 
             if (enableDebug) std::cout << "[Debug] Compilation successful.\n";

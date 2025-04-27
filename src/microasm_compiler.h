@@ -33,6 +33,7 @@ class Compiler {
     int currentAddress = 0;
     int dataAddress = 0;
     bool debugMode = false;
+    bool write_dbg_data = true;
 
     // Include directive handling
     std::set<std::string> includedFiles;
@@ -50,8 +51,8 @@ class Compiler {
     void parseLine(const std::string& line, int lineNumber); // Updated to accept lineNumber
 
 public:
-    void setDebugMode(bool enabled);
-    void parse(const std::string& source, const std::string& debug_file);
+    void setFlags(bool debug=false, bool write_dbg=false);
+    void parse(const std::string& source);
     void compile(const std::string& outputFile);
 };
 

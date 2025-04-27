@@ -6,6 +6,7 @@ A MicroASM `.bin` file consists of:
 - **Header** (24 bytes)
 - **Code Segment** (bytecode instructions)
 - **Data Segment** (raw bytes, e.g. strings)
+- **Dbg Segment**  (debug data)
 
 ### Header Structure (24 bytes)
 | Offset | Size | Field        | Description                |
@@ -15,8 +16,9 @@ A MicroASM `.bin` file consists of:
 | 6      | 2    | reserved     | 0                          |
 | 8      | 4    | codeSize     | Code segment size (bytes)  |
 | 12     | 4    | dataSize     | Data segment size (bytes)  |
-| 16     | 4    | entryPoint   | Code offset to start exec  |
-| 20     | 4    | (unused)     | 0 (padding)                |
+| 16     | 4    | dbgSize      | Debug segment size (bytes) |
+| 20     | 4    | entryPoint   | Code offset to start exec  |
+| 24     | 4    | (unused)     | 0 (padding)                |
 
 All integer fields are **little-endian**.
 

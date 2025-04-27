@@ -22,6 +22,7 @@ struct BinaryHeader {
     uint16_t reserved = 0; // Padding/Reserved for future use
     uint32_t codeSize = 0;
     uint32_t dataSize = 0;
+    uint32_t dbgSize = 0;
     uint32_t entryPoint = 0; // Offset within the code segment
 };
 

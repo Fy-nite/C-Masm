@@ -54,9 +54,11 @@ static std::vector<std::string> readFileLines(const std::string& filePath) {
 
 // --- Compiler Method Definitions ---
 
-void Compiler::setDebugMode(bool enabled) {
-    debugMode = enabled;
+void Compiler::setFlags(bool debug, bool write_dbg) {
+    debugMode = debug;
     if (debugMode) std::cout << "[Debug][Compiler] Debug mode enabled.\n";
+    write_dbg_data = write_dbg;
+    if (debugMode) std::cout << "[Debug][Compiler] write debug data enabled.\n";
 }
 
 int getmin(int i)
@@ -257,7 +259,7 @@ void Compiler::parseFile(const std::string& filePath) {
     currentFileDir = previousFileDir;
 }
 
-void Compiler::parse(const std::string& source, const std::string& debug_file) {
+void Compiler::parse(const std::string& source) {
     std::istringstream stream(source);
     std::string line;
     int lineNumber = 0; // Track line number
@@ -269,14 +271,6 @@ void Compiler::parse(const std::string& source, const std::string& debug_file) {
             throw std::runtime_error("Error at line " + std::to_string(lineNumber) + ": " + e.what());
         }
     }
-    std::ofstream df(debug_file);
-    for (const auto& pair : labelMap) {
-        std::string lbl = pair.first;
-        int addr = pair.second;
-        df.write(lbl.c_str(), lbl.length() + 1);
-        df.write(reinterpret_cast<const char*>(&addr), sizeof(addr));
-    }
-    df.close();
 }
 
 void Compiler::parseLine(const std::string& line, int lineNumber) {
@@ -323,56 +317,56 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
             labelMap["#" + label] = currentAddress; // Store labels with # prefix
             if (debugMode) std::cout << "[Debug][Compiler]   Defined label '" << label << "' at address " << currentAddress << "\n";
         } else if (upperToken == "DB") {
-             // Simplified DB handling: Assume address is a label like $1, $2 etc.
-             // and string follows. Compiler needs to manage this data.
-             // For now, we'll just note it requires more work.
-             // Example: DB $1 "Hello"
-             std::string dataLabel, dataValue;
-             stream >> dataLabel; // e.g., $1
-             std::getline(stream >> std::ws, dataValue); // Read rest of line as string
+            // Simplified DB handling: Assume address is a label like $1, $2 etc.
+            // and string follows. Compiler needs to manage this data.
+            // For now, we'll just note it requires more work.
+            // Example: DB $1 "Hello"
+            std::string dataLabel, dataValue;
+            stream >> dataLabel; // e.g., $1
+            std::getline(stream >> std::ws, dataValue); // Read rest of line as string
 
-             // Trim trailing whitespace from dataValue
-             dataValue.erase(std::find_if_not(dataValue.rbegin(), dataValue.rend(), [](unsigned char ch) {
-                 return std::isspace(ch);
-             }).base(), dataValue.end());
+            // Trim trailing whitespace from dataValue
+            dataValue.erase(std::find_if_not(dataValue.rbegin(), dataValue.rend(), [](unsigned char ch) {
+                return std::isspace(ch);
+            }).base(), dataValue.end());
 
-             // Now check for quotes on the potentially trimmed string
-             if (dataValue.length() >= 2 && dataValue.front() == '"' && dataValue.back() == '"') {
-                 dataValue = dataValue.substr(1, dataValue.length() - 2); // Remove quotes
-             } else {
-                 // If it still fails, throw the error
-                 throw std::runtime_error("DB requires a quoted string (check quotes and content): [" + dataValue + "]");
-             }
-             // Handle escape sequences like \n (basic implementation)
-             std::string processedValue;
-             for (size_t i = 0; i < dataValue.length(); ++i) {
-                 if (dataValue[i] == '\\' && i + 1 < dataValue.length()) {
-                     switch (dataValue[i+1]) {
-                         case 'n': processedValue += '\n'; i++; break;
-                         case 't': processedValue += '\t'; i++; break;
-                         case '\\': processedValue += '\\'; i++; break;
-                         case '"': processedValue += '"'; i++; break;
-        
-                         default: processedValue += dataValue[i]; break; // Keep backslash if not a known escape
-                     }
-                 } else {
-                     processedValue += dataValue[i];
-                 }
-             }
-             std::string addr = dataLabel;
-             addr.erase(0, 1);
-             int addre = std::stoi(addr);
-             int size = processedValue.length() + 1;
-             dataSegment.push_back(addre & 0xFF);
-             dataSegment.push_back(addre >> 8);
-             dataSegment.push_back(size & 0xFF);
-             dataSegment.push_back(size >> 8);
-             for(char c : processedValue) {
-                 dataSegment.push_back(c);
-             }
-             dataSegment.push_back('\0'); // Null-terminate for convenience
-             dataAddress += processedValue.length() + 1;
-             if (debugMode) std::cout << "[Debug][Compiler]   Defined data label '" << dataLabel << " with value \"" << processedValue << "\"\n";
+            // Now check for quotes on the potentially trimmed string
+            if (dataValue.length() >= 2 && dataValue.front() == '"' && dataValue.back() == '"') {
+                dataValue = dataValue.substr(1, dataValue.length() - 2); // Remove quotes
+            } else {
+                // If it still fails, throw the error
+                throw std::runtime_error("DB requires a quoted string (check quotes and content): [" + dataValue + "]");
+            }
+            // Handle escape sequences like \n (basic implementation)
+            std::string processedValue;
+            for (size_t i = 0; i < dataValue.length(); ++i) {
+            if (dataValue[i] == '\\' && i + 1 < dataValue.length()) {
+            switch (dataValue[i+1]) {
+            case 'n': processedValue += '\n'; i++; break;
+            case 't': processedValue += '\t'; i++; break;
+            case '\\': processedValue += '\\'; i++; break;
+            case '"': processedValue += '"'; i++; break;
+    
+                        default: processedValue += dataValue[i]; break; // Keep backslash if not a known escape
+                        }
+                        } else {
+                        processedValue += dataValue[i];
+                        }
+                        }
+                        std::string addr = dataLabel;
+                        addr.erase(0, 1);
+                        int addre = std::stoi(addr);
+                        int size = processedValue.length() + 1;
+                        dataSegment.push_back(addre & 0xFF);
+                        dataSegment.push_back(addre >> 8);
+                        dataSegment.push_back(size & 0xFF);
+                        dataSegment.push_back(size >> 8);
+                        for(char c : processedValue) {
+                        dataSegment.push_back(c);
+                        }
+            dataSegment.push_back('\0'); // Null-terminate for convenience
+            dataAddress += processedValue.length() + 1;
+            if (debugMode) std::cout << "[Debug][Compiler]   Defined data label '" << dataLabel << " with value \"" << processedValue << "\"\n";
 
         } else if (upperToken == "MNI") {
             Instruction instr;
@@ -383,7 +377,7 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
             }
             // Validate name format roughly (contains '.')
             if (instr.mniFunctionName.find('.') == std::string::npos) {
-                 throw std::runtime_error("Invalid MNI function name format: " + instr.mniFunctionName + " (expected Module.Function)");
+                throw std::runtime_error("Invalid MNI function name format: " + instr.mniFunctionName + " (expected Module.Function)");
             }
 
             std::string operand;
@@ -403,8 +397,8 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
             instructions.push_back(instr);
             currentAddress += calculateInstructionSize(instr);
             if (debugMode) std::cout << "[Debug][Compiler]   Parsed instruction: " << upperToken
-                                     << " with " << instr.operands.size() << " operands. New address: "
-                                     << currentAddress << "\n";
+                                    << " with " << instr.operands.size() << " operands. New address: "
+                                    << currentAddress << "\n";
         }
     } catch (const std::exception& e) {
         throw std::runtime_error("Error at line " + std::to_string(lineNumber) + ", column " + std::to_string(columnNumber) + ": " + e.what());
@@ -463,7 +457,14 @@ void Compiler::compile(const std::string& outputFile) {
     header.version = VERSION;
     header.codeSize = actualCodeSize;
     header.dataSize = dataSegment.size();
+    header.dbgSize = 0;
     header.entryPoint = entryPointAddress; // Set the found entry point
+    if (write_dbg_data) {
+        for (auto& p : labelMap) {
+            header.dbgSize += p.first.size()+1;
+            header.dbgSize += sizeof(p.second);
+        }
+    }
 
     // Write the header
     out.write(reinterpret_cast<const char*>(&header), sizeof(header));
@@ -528,6 +529,14 @@ void Compiler::compile(const std::string& outputFile) {
     if (!dataSegment.empty()) {
         if (debugMode) std::cout << "[Debug][Compiler] Writing data segment (" << header.dataSize << " bytes)...\n";
         out.write(dataSegment.data(), dataSegment.size());
+    }
+    if (write_dbg_data) {
+        for (const auto& pair : labelMap) {
+            std::string lbl = pair.first;
+            int addr = pair.second;
+            out.write(lbl.c_str(), lbl.length() + 1);
+            out.write(reinterpret_cast<const char*>(&addr), sizeof(addr));
+        }
     }
     if (debugMode) std::cout << "[Debug][Compiler] Compilation finished.\n";
     // Note: Interpreter needs to read the header to know segment sizes and entry point.
@@ -613,29 +622,29 @@ ResolvedOperand Compiler::resolveOperand(const std::string& operand, Opcode cont
                 result.type = OperandType::REGISTER;
                 result.value = regIndex;
             } else {
-                 try {
+                try {
                      // Check R<num> format
-                     if (regName.length() > 1 && std::isdigit(regName[1])) {
-                         int regIndexNum = std::stoi(regName.substr(1));
-                         if (regIndexNum >= 0 && regIndexNum <= 15) {
-                             result.type = OperandType::REGISTER;
-                             result.value = regIndexNum + 8; // Map R0-R15 to indices 8-23
-                         } else {
-                             throw std::runtime_error("Register index out of range (R0-R15): " + operand);
-                         }
-                     } else {
-                         throw std::runtime_error("Unknown register format: " + operand);
-                     }
-                 } catch (...) {
-                     throw std::runtime_error("Unknown or invalid register: " + operand);
-                 }
+                    if (regName.length() > 1 && std::isdigit(regName[1])) {
+                        int regIndexNum = std::stoi(regName.substr(1));
+                        if (regIndexNum >= 0 && regIndexNum <= 15) {
+                            result.type = OperandType::REGISTER;
+                            result.value = regIndexNum + 8; // Map R0-R15 to indices 8-23
+                        } else {
+                            throw std::runtime_error("Register index out of range (R0-R15): " + operand);
+                        }
+                    } else {
+                        throw std::runtime_error("Unknown register format: " + operand);
+                    }
+                } catch (...) {
+                    throw std::runtime_error("Unknown or invalid register: " + operand);
+                }
             }
         } else { // Immediate value (not starting with $ or # or R)
             try {
                 long long val = std::stoll(operand);
-                 if (val < INT_MIN || val > INT_MAX) {
-                     throw std::runtime_error("Immediate value out of 32-bit range: " + operand);
-                 }
+                if (val < INT_MIN || val > INT_MAX) {
+                    throw std::runtime_error("Immediate value out of 32-bit range: " + operand);
+                }
                 result.type = OperandType::IMMEDIATE;
                 result.value = static_cast<int>(val);
             } catch (...) { // Catch invalid_argument, out_of_range
@@ -658,8 +667,8 @@ int microasm_compiler_main(int argc, char* argv[]) {
     // --- Argument Parsing for Standalone Compiler ---
     std::string sourceFile;
     std::string outputFile;
-    std::string debugFile;
     bool enableDebug = false;
+    bool write_dbg_data = false;
     std::vector<char*> filtered_args; // Store non-debug args for potential future use
 
     // argv[0] here is the *first argument* after "-c", not the program name
@@ -667,24 +676,24 @@ int microasm_compiler_main(int argc, char* argv[]) {
         std::string arg = argv[i];
         if (arg == "-d" || arg == "--debug") {
             enableDebug = true;
+        } else if (arg == "-g" || arg == "--dbg_data") {
+            std::cout << "WARNING: Debug data being written to file" << std::endl;
+            write_dbg_data = true;
         } else if (sourceFile.empty()) {
             sourceFile = arg;
             filtered_args.push_back(argv[i]);
         } else if (outputFile.empty()) {
             outputFile = arg;
             filtered_args.push_back(argv[i]);
-        } else if (debugFile.empty()) {
-            debugFile = arg;
-            filtered_args.push_back(argv[i]);
         } else {
             // Handle extra arguments if necessary, or ignore/error
-             filtered_args.push_back(argv[i]);
+            filtered_args.push_back(argv[i]);
         }
     }
 
     if (sourceFile.empty() || outputFile.empty()) {
-         std::cerr << "Compiler Usage: <source.masm> <output.bin> [debug.masmd] [-d|--debug]" << std::endl;
-         return 1;
+        std::cerr << "Compiler Usage: <source.masm> <output.bin> [debug.masmd] [-d|--debug]" << std::endl;
+        return 1;
     }
     // --- End Argument Parsing ---
 
@@ -699,8 +708,8 @@ int microasm_compiler_main(int argc, char* argv[]) {
         fileStream.close();
 
         Compiler compiler;
-        compiler.setDebugMode(enableDebug); // Set debug mode
-        compiler.parse(buffer.str(), debugFile);       // Parse content
+        compiler.setFlags(enableDebug, write_dbg_data); // Set debug mode
+        compiler.parse(buffer.str());       // Parse content
         compiler.compile(outputFile);       // Compile to output
 
         std::cout << "Compilation successful: " << sourceFile << " -> " << outputFile << std::endl;
