@@ -6,7 +6,6 @@ import time
 import io
 import threading
 import random
-import inspect
 
 MAX_THREADS = -1
 
@@ -195,7 +194,7 @@ def random_quote(bad):
         "That feeling when your code works... To bad you cant feel it - Carson"
     ]
     passed = [
-        f"I really need more quotes for when tests pass. This is currently the only one (plus the always ones). If you want to add some you can on line {inspect.getframeinfo(inspect.currentframe()).lineno} of run_tests.py - Carson"
+        "I really need more quotes for when tests pass. This is currently the only one (plus the always ones). If you want to add some you can on line 196 of run_tests.py - Carson"
     ]
     return random.choice(always + (failed if bad else passed))
 

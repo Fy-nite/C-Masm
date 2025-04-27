@@ -17,7 +17,7 @@
             }
         },
         {
-            "name": "compile stack_trace and test dbg output",
+            "name": "masm dbg",
             "type": "Compiling",
             "id": 1,
             "depends": [0],
@@ -54,9 +54,9 @@
                     "args":[0]
                 },
                 {
-                    "err": "Expected (110,156,135,0,)\\n1 + 2 = 3\\n in stdout, instead got %stdout%",
+                    "err": "Expected (110,156,135,0,)\\n1 + 2 = 3 in stdout, instead got %stdout%",
                     "check": "Tstdout",
-                    "args": ["(110,156,135,0,)\n1 + 2 = 3\n"]
+                    "args": ["(110,156,135,0,)\n1 + 2 = 3"]
                 }
             ]
         },

@@ -6,7 +6,6 @@ import time
 import io
 import threading
 import random
-import inspect
 
 MAX_THREADS = -1
 
@@ -195,7 +194,7 @@ def random_quote(bad):
         "That feeling when your code works... To bad you cant feel it - Carson"
     ]
     passed = [
-        f"I really need more quotes for when tests pass. This is currently the only one (plus the always ones). If you want to add some you can on line {inspect.getframeinfo(inspect.currentframe()).lineno} of run_tests.py - Carson"
+        "I really need more quotes for when tests pass. This is currently the only one (plus the always ones). If you want to add some you can on line 196 of run_tests.py - Carson"
     ]
     return random.choice(always + (failed if bad else passed))
 
@@ -238,9 +237,6 @@ def run_tests():
     if percent > 0.5:
         print(f"\x1B[1m\x1b[38;5;48m{passed}/{total} tests succeded! (%{round(percent*100)})\x1b[0m")
         print(f"\x1b[3;30m{random_quote(False)}\x1b[0m")
-    elif percent == 0.5:
-        print(f"\x1B[1m\x1b[38;5;226m{passed}/{total} tests succeded? (%{round(percent*100)})\x1b[0m")
-        print(f"\x1b[3;30mtf\x1b[0m")
     else:
         print(f"\x1B[1m\x1b[38;5;196m{passed}/{total} tests succeded! (%{round(percent*100)})\x1b[0m")
         print(f"\x1b[3;30m{random_quote(True)}\x1b[0m")

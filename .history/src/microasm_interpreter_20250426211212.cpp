@@ -709,7 +709,7 @@ void Interpreter::execute() {
                     pushStack(registers[6]); // Push RBP
                     registers[6] = registers[7]; // MOV RBP, RSP
                     bp = registers[6];
-                    registers[7] -= frameSize; // SUB RSP, framesize // (PUSH 0) * framesize
+                    registers[7] -= frameSize; // SUB RSP, framesize
                     sp = registers[7];
                     break;
                 }

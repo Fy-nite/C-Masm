@@ -85,7 +85,7 @@ int calculateOperandSize(std::string op) {
 }
 
 int Compiler::calculateInstructionSize(const Instruction& instr) {
-    if (instr.opcode == ENTER && instr.operands.size() == 0) return 3;
+    if (instr.opcode == ENTER && instr.operands.size() == 0) return 2;
     if (instr.opcode == DB || instr.opcode == LBL) return 0; // Pseudo-instructions
 
     if (instr.opcode == MNI) {

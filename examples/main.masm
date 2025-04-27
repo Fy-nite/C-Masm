@@ -1,0 +1,6 @@
+lbl main
+    DB $200 "meow"
+    DB $200 "meows"
+    out 1 $100
+    MNI StringOperations.cmp 100 200
+    hlt

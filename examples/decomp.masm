@@ -1,0 +1,12 @@
+
+lbl main
+IN $200
+MNI StringOperations.cmp $100 $200
+JE #label_0
+HLT
+
+lbl label_0
+OUT 1 $500
+HLT
+DB $100 "meow"
+DB $500 "yes"

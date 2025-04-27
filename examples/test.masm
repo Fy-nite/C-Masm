@@ -1,0 +1,11 @@
+db $100 "meow"
+db $500 "yes"
+lbl main
+in $200
+MNI StringOperations.cmp $100 $200
+je #yes
+hlt
+mov rax rax
+lbl yes
+out 1 $500
+hlt

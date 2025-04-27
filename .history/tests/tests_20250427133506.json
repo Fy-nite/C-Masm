@@ -17,11 +17,11 @@
             }
         },
         {
-            "name": "compile stack_trace and test dbg output",
+            "name": "Test dbg output",
             "type": "Compiling",
             "id": 1,
             "depends": [0],
-            "cmd": ["%masm%", "-c", "%data%/stack_trace.masm", "%tmp%/stack.bin", "%tmp%/stack.dbg"],
+            "cmd": ["%masm% -c %data%/stack_trace.masm %tmp%/stack.bin %tmp%/data.dbg"],
             "result": [
                 {
                     "err":"Masm returned non 0 exit code. See Above",
@@ -35,28 +35,9 @@
                     "run": ["%masm%", "-u", "%tmp%/stack.bin"]
                 },
                 {
-                    "err":"Masm dbg is wrong.",
+                    "err":"Masm dbg is wrong. See Below",
                     "check": "Tfile",
                     "args": ["%tmp%/stack.dbg", "%data%/stack.dbg.expected"]
-                }
-            ]
-        },
-        {
-            "name": "run stack_trace.masm",
-            "type": "RUNNING",
-            "id": 2,
-            "depends": [1],
-            "cmd": ["%masm%", "-i", "%tmp%/stack.bin"],
-            "result": [
-                {
-                    "err":"Masm returned non 0 exit code. See Above",
-                    "check": "Texit_code",
-                    "args":[0]
-                },
-                {
-                    "err": "Expected (110,156,135,0,)\\n1 + 2 = 3\\n in stdout, instead got %stdout%",
-                    "check": "Tstdout",
-                    "args": ["(110,156,135,0,)\n1 + 2 = 3\n"]
                 }
             ]
         },
