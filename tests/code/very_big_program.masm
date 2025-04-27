@@ -1,0 +1,37 @@
+lbl print
+mov rbx $rax
+cmp rbx 0
+je #done
+inc RAX
+cout 1 rbx
+jmp #print
+lbl done
+ret
+
+DB $100 "Hello, World!\n"
+DB $200 "Hello, World! again\n"
+DB $300 "tyring to take a long time to test multithreading\n"
+DB $400 "and the compiler\n"
+DB $500 "YIPPIE\n"
+DB $600 "Hello, World!\n"
+DB $700 "Hello, World!\n"
+DB $800 "Hello, World!\n"
+
+lbl main
+mov rax 100
+call #print
+mov rax 200
+call #print
+mov rax 300
+call #print
+mov rax 400
+call #print
+mov rax 500
+call #print
+mov rax 600
+call #print
+mov rax 700
+call #print
+mov rax 800
+call #print
+hlt

@@ -1,0 +1,3 @@
+lbl main
+DB $100 "Hello, Builtin World!\n"
+out 1 $100

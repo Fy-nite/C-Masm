@@ -1,0 +1,17 @@
+; charlie this file is written to print charactor by charactor to test more than db and out
+lbl print
+mov rbx $rax
+cmp rbx 0
+je #done
+inc RAX
+cout 1 rbx
+jmp #print
+lbl done
+ret
+
+DB $100 "Hello, World!\n"
+
+lbl main
+mov rax 100
+call #print
+hlt

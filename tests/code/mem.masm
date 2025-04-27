@@ -1,0 +1,4 @@
+lbl main
+movto 100 0 10
+mov rax $100
+out 1 rax

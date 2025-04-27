@@ -82,3 +82,6 @@ Thumbs.db
 masm
 masm.exe
 masm.*
+
+# tests
+!tests/*/*

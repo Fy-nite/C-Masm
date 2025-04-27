@@ -5,6 +5,7 @@ import subprocess
 import time
 import io
 import threading
+import random
 
 MAX_THREADS = -1
 
@@ -32,17 +33,17 @@ def file(stdout, stderr, proc, params, test):
     try:
         f1 = params[0]
         f2 = params[1]
-        with open(f1, "r") as file1:
-            with open(f2, "r") as file2:
+        with open(f1, "rb") as file1:
+            with open(f2, "rb") as file2:
                 return file1.read() == file2.read()
     except Exception as e:
         return False
 
-def car(prgm):
+def car(prgm, output): #compile_and_run
     ret = [{
             "name": f"compile {prgm}.masm",
             "type": "COMPILING",
-            "id": 3,
+            "id": -1,
             "cmd": ["%masm%", "-c", f"%data%/{prgm}.masm", f"%tmp%/{prgm}.bin"],
             "depends": [0],
             "result": [
@@ -62,14 +63,19 @@ def car(prgm):
         {
             "name": f"run {prgm}.masm",
             "type": "RUNNING",
-            "id": 4,
-            "depends": [3],
+            "id": -2,
+            "depends": [-1],
             "cmd": ["%masm%", "-i", f"%tmp%/{prgm}.bin"],
             "result": [
                 {
                     "err":"Masm returned non 0 exit code. See Above",
                     "check": "Texit_code",
                     "args":[0]
+                },
+                {
+                    "err": f"Expected {output} in stdout, instead got %stdout%",
+                    "check": "Tstdout",
+                    "args": [output]
                 }
             ]
         }]
@@ -132,12 +138,15 @@ def run_test(test: dict):
         failed_tests.append(test)
         return 0
     
-    if True in [i in [t["id"] for t in failed_tests] for i in depends]: # if depends on failed test
-        failed_tests.append(test)
-        failed(name, "Depends on failed test")
-        return 0
+    # if True in [i in [t["id"] for t in failed_tests] for i in depends]: # if depends on failed test
+    #     failed_tests.append(test)
+    #     failed(name, "Depends on failed test")
+    #     return 0
     while False in [i in [t["id"] for t in completed_tests] for i in depends]:
-        time.sleep(0.1)
+        if True in [i in [t["id"] for t in failed_tests] for i in depends]: # if depends on failed test
+            failed_tests.append(test)
+            failed(name, "Depends on failed test")
+            return 0
     
     proc = subprocess.Popen([parse(i) for i in cmd], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
@@ -150,7 +159,7 @@ def run_test(test: dict):
 
     for i in result:
         res = checks[i["check"][1:]](stdout_text, stderr_text, proc, [parse(a) for a in i["args"]], test)
-        if not res and i["check"][0] == "T":
+        if (not res and i["check"][0] == "T") or (res and i["check"][0] == "F"):
             passed = False
             failed(name, parse(i["err"], {"stdout": repr(stdout_text)}))
             if "run" in i.keys():
@@ -173,6 +182,21 @@ def first_id(used_ids):
         if i not in used_ids:
             return i
         i += 1
+
+def random_quote(bad):
+    always = [
+        "Shall we play a game? - Wargames 1983",
+        "Wouldn't you prefer a good game of chess? - Wargames 1983",
+        "Let's play Global Thermonuclear War. - Wargames 1983"
+    ]
+    failed = [
+        "It works. If the goal is red text. - Carson",
+        "That feeling when your code works... To bad you cant feel it - Carson"
+    ]
+    passed = [
+        "I really need more quotes for when tests pass. This is currently the only one (plus the always ones). If you want to add some you can on line 196 of run_tests.py - Carson"
+    ]
+    return random.choice(always + (failed if bad else passed))
 
 def run_tests():
     print("─"*50)
@@ -198,14 +222,24 @@ def run_tests():
             used_ids.append(i["id"])
             tests_good.append(i)
     for i in tests_good:
-        print(i)
         t = threading.Thread(target=run_test, args=(i,))
         t.start()
+        t.name = i["name"]
         threads.append(t)
         
     while True in [i.is_alive() for i in threads]:
-        time.sleep(0.1)
+        time.sleep(0.001)
 
+    print("─"*50)
+    total = len(tests_good)
+    passed = len(completed_tests)
+    percent = passed/total
+    if percent > 0.5:
+        print(f"\x1B[1m\x1b[38;5;48m{passed}/{total} tests succeded! (%{round(percent*100)})\x1b[0m")
+        print(f"\x1b[3;30m{random_quote(False)}\x1b[0m")
+    else:
+        print(f"\x1B[1m\x1b[38;5;196m{passed}/{total} tests succeded! (%{round(percent*100)})\x1b[0m")
+        print(f"\x1b[3;30m{random_quote(True)}\x1b[0m")
     print("─"*50)
     return 1
 
