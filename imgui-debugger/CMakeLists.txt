@@ -24,6 +24,7 @@ set(SOURCES
 # MicroASM interpreter include dir (adjust if needed)
 include_directories(
     ${CMAKE_SOURCE_DIR}/..
+    ../src/
     ${CMAKE_SOURCE_DIR}/../ # For microasm_interpreter.h etc.
     .
 )
@@ -34,7 +35,8 @@ include_directories(${SDL2_INCLUDE_DIRS})
 
 # Add MicroASM interpreter sources (adjust as needed)
 set(MICROASM_SOURCES
-    ../microasm_interpreter.cpp
+    ../src/microasm_interpreter.cpp
+    ../src/microasm_interpreter.h
     
 )
 
