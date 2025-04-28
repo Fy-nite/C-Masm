@@ -82,6 +82,8 @@ public: // Public methods including memory access for C API
 
     // Execute a single instruction (must be implemented)
     void executeStep();
+
+    void callMNI(const std::string& name, const std::vector<BytecodeOperand>& args);
 };
 
 // Declare the standalone main function for the interpreter

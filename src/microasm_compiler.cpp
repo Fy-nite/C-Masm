@@ -225,7 +225,7 @@ void Compiler::parse(const std::string& source) {
 
 void Compiler::parseLine(const std::string& line, int lineNumber) {
     std::string trimmedLine = trim(line);
-    if (trimmedLine.empty() || trimmedLine[0] == ';') return; // Skip comments and empty lines
+    if (trimmedLine.empty() || trimmedLine[0] == ';') return; // Skip empty or comment lines
 
     if (debugMode) std::cout << "[Debug][Compiler] Parsing line " << lineNumber << ": " << trimmedLine << "\n";
 

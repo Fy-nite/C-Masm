@@ -34,6 +34,13 @@ void registerMNI(const std::string& module, const std::string& name, MniFunction
 
 // --- Interpreter Method Definitions ---
 
+// Add register names for register dump
+static const char* regNames[24] = {
+    "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP",
+    "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
+    "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"
+};
+
 Interpreter::Interpreter(int ramSize, const std::vector<std::string>& args, bool debug)
     : registers(24, 0),
       ram(ramSize, 0),
@@ -306,6 +313,9 @@ void Interpreter::execute() {
     // Ensure SP and BP reflect register values at start
     sp = registers[7];
     bp = registers[6];
+
+    // Add MNI call stack
+    std::vector<std::string> mniCallStack;
 
     while (ip < bytecode_raw.size()) {
         int currentIp = ip;
@@ -728,12 +738,17 @@ void Interpreter::execute() {
                         if(debugMode) std::cout << "[Debug][Interpreter]     MNI Arg : " << formatOperandDebug(arg) << "\n";
                         mniArgs.push_back(arg);
                     }
-
+                    // Stack trace: push function name
+                    mniCallStack.push_back(functionName);
                     if (mniRegistry.count(functionName)) {
                         mniRegistry[functionName](*this, mniArgs); // Call the registered function
                     } else {
+                        // Pop before throw
+                        mniCallStack.pop_back();
                         throw std::runtime_error("Unregistered MNI function called: " + functionName);
                     }
+                    // Pop after call
+                    mniCallStack.pop_back();
                     break;
                 }
 
@@ -744,8 +759,8 @@ void Interpreter::execute() {
             // Optional: Print changed registers
             if (debugMode) {
                 for(size_t i = 0; i < registers.size(); ++i) {
-                    if (registers[i] != regsBefore[i]) {
-                         std::cout << "[Debug][Interpreter]     Reg Change: R" << i << " = " << registers[i] << " (was " << regsBefore[i] << ")\n";
+                     if (registers[i] != regsBefore[i]) {
+                         std::cout << "[Debug][Interpreter]     Reg Change: " << regNames[i] << " = " << registers[i] << " (was " << regsBefore[i] << ")\n";
                     }
                 }
                 // Print flag changes if CMP or relevant instruction executed
@@ -754,13 +769,69 @@ void Interpreter::execute() {
 
         } catch (const std::exception& e) {
              std::cerr << "\nRuntime Error at bytecode offset 0x" << std::hex << currentIp << std::dec << " (Opcode: 0x" << std::hex << static_cast<int>(opcode) << std::dec << "): " << e.what() << std::endl;
-             // Dump registers on error
-             std::cerr << "Register dump:\n";
-             for(size_t i = 0; i < registers.size(); ++i) {
-                 std::cerr << "  R" << std::setw(2) << std::setfill(' ') << i << ": " << std::setw(10) << registers[i] << " (0x" << std::hex << std::setw(8) << std::setfill('0') << registers[i] << std::dec << ")\n";
-             }
-             std::cerr << "  ZF=" << zeroFlag << ", SF=" << signFlag << "\n";
-             throw; // Re-throw after logging context
+            // Print MNI stack trace if any
+            if (!mniCallStack.empty()) {
+                std::cerr << "MNI Call Stack (most recent call last):\n";
+                for (auto it = mniCallStack.rbegin(); it != mniCallStack.rend(); ++it) {
+                    std::cerr << "  at " << *it << std::endl;
+                }
+            }
+            // Dump registers with names and color
+            std::cerr << "Register dump:\n";
+            // Dump registers as an ASCII box (8 per row)
+            const int regsPerRow = 8;
+            const int totalRegs = registers.size();
+            const int rows = (totalRegs + regsPerRow - 1) / regsPerRow;
+            const int colWidth = 12; // Match hex value width
+            std::cerr << "+" << std::string(regsPerRow * (colWidth + 1), '-') << "+\n";
+            for (int row = 0; row < rows; ++row) {
+                // Header row: register names (centered, colWidth chars)
+                std::cerr << "|";
+                for (int col = 0; col < regsPerRow; ++col) {
+                    int idx = row * regsPerRow + col;
+                    if (idx < totalRegs) {
+                        std::string color;
+                        if (idx == 0) color = "\033[1;33m"; // RAX: yellow
+                        else if (idx == 6 || idx == 7) color = "\033[1;36m"; // RBP/RSP: cyan
+                        else color = "\033[1m";
+                        std::string name = regNames[idx];
+                        int pad = colWidth - name.length();
+                        int left = pad / 2, right = pad - left;
+                        std::cerr << color << std::string(left, ' ') << name << std::string(right, ' ') << "\033[0m" << "|";
+                    } else {
+                        std::cerr << std::string(colWidth, ' ') << "|";
+                    }
+                }
+                std::cerr << "\n|";
+                // Value row: decimal values (colWidth chars)
+                for (int col = 0; col < regsPerRow; ++col) {
+                    int idx = row * regsPerRow + col;
+                    if (idx < totalRegs) {
+                        std::cerr << std::setw(colWidth) << registers[idx] << "|";
+                    } else {
+                        std::cerr << std::string(colWidth, ' ') << "|";
+                    }
+                }
+                std::cerr << "\n|";
+                // Value row: hex values (colWidth chars)
+                for (int col = 0; col < regsPerRow; ++col) {
+                    int idx = row * regsPerRow + col;
+                    if (idx < totalRegs) {
+                        std::stringstream hexss;
+                        hexss << "0x" << std::hex << std::setw(8) << std::setfill('0') << registers[idx] << std::dec;
+                        std::string hexval = hexss.str();
+                        int pad = colWidth - hexval.length();
+                        int left = pad / 2, right = pad - left;
+                        std::cerr << std::string(left, ' ') << hexval << std::string(right, ' ') << "|";
+                    } else {
+                        std::cerr << std::string(colWidth, ' ') << "|";
+                    }
+                }
+                std::cerr << "\n+" << std::string(regsPerRow * (colWidth + 1), '-') << "+\n";
+            }
+            std::cerr << "  ZF=" << zeroFlag << ", SF=" << signFlag << "\n";
+            std::cerr << "\033[1;33mRAX\033[0m, \033[1;36mRBP/RSP\033[0m: special registers\n";
+            throw; // Re-throw after logging context
         }
     }
      if (debugMode) std::cout << "[Debug][Interpreter] Execution finished (reached end of bytecode).\n";
@@ -770,6 +841,30 @@ void Interpreter::executeStep() {
     // TODO: Implement single-instruction execution logic.
     // For now, just call execute() as a placeholder.
     execute();
+}
+
+// Add a public method to Interpreter for MNI-to-MNI calls
+void Interpreter::callMNI(const std::string& name, const std::vector<BytecodeOperand>& args) {
+    // Use a static thread_local call stack for MNI stack tracing
+    static thread_local std::vector<std::string> mniCallStackInternal;
+    mniCallStackInternal.push_back(name);
+    if (mniRegistry.count(name)) {
+        try {
+            mniRegistry[name](*this, args);
+        } catch (...) {
+            // Print stack trace on error
+            std::cerr << "MNI Call Stack (most recent call last):\n";
+            for (auto it = mniCallStackInternal.rbegin(); it != mniCallStackInternal.rend(); ++it) {
+                std::cerr << "  at " << *it << std::endl;
+            }
+            mniCallStackInternal.pop_back();
+            throw;
+        }
+    } else {
+        mniCallStackInternal.pop_back();
+        throw std::runtime_error("Unregistered MNI function called: " + name);
+    }
+    mniCallStackInternal.pop_back();
 }
 
 // --- Standalone Interpreter Main Function Definition ---
@@ -806,8 +901,8 @@ int microasm_interpreter_main(int argc, char* argv[]) {
 
         // std::cout << "Execution finished successfully!" << std::endl; // HLT provides its own message
     } catch (const std::exception& e) {
-        // Error already logged in execute() or load()
-        // std::cerr << "Execution failed: " << e.what() << std::endl;
+
+        std::cerr << "Execution failed: " << e.what() << std::endl;
         return 1;
     }
 
