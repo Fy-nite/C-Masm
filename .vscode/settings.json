@@ -1,5 +1,10 @@
 {
     "files.associations": {
+        "*.embeddedhtml": "html",
+        "*.csp": "plaintext",
+        "*.tsx": "typescriptreact",
+        "*.ts": "typescript",
+        "*.css": "css",
         "*.wake": "go",
         "unordered_map": "cpp",
         "stdexcept": "cpp",
@@ -95,7 +100,16 @@
         "mutex": "cpp",
         "string_view": "cpp",
         "variant": "cpp",
-        "__functional_base": "cpp"
+        "__functional_base": "cpp",
+        "condition_variable": "cpp",
+        "memory_resource": "cpp",
+        "numeric": "cpp",
+        "random": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp",
+        "stop_token": "cpp",
+        "thread": "cpp",
+        "cinttypes": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
 }

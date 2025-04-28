@@ -277,12 +277,19 @@ void Interpreter::initializeMNIFunctions() {
         int count = machine.getValue(args[0]);
         if (count <= 0) {
           std::cout << "Recursive call limit reached. Exiting." << std::endl;
+          throw std::runtime_error(
+              "Test.recursiveCallbreaker reached max recursion depth: " +
+              std::to_string(count));
           return;
         }
         // Call the recursive function with decremented count
         for (int i = 0; i < count; ++i) {
           machine.callMNI("Test.recursiveCall", {});
         }
+        // Call the breaker function again with decremented count
+        machine.callMNI("Test.recursiveCallbreaker",
+                        {BytecodeOperand{OperandType::IMMEDIATE, count - 1}});
+        // Note: This will eventually lead to a stack overflow if not careful which is what we want
       });
 
   // Memory.allocate R1 R2 (R1=size, R2=destReg for address) - Needs heap
@@ -1436,15 +1443,16 @@ void Interpreter::executeStep() {
   // For now, lets just call execute() as a placeholder.
   execute();
 }
+static std::vector<std::string> mniCallStackInternal;
 
 void Interpreter::callMNI(const std::string &name,
                           const std::vector<BytecodeOperand> &args) {
 
   // Use a static thread_local call stack for MNI stack tracing
 
-  static thread_local std::vector<std::string> mniCallStackInternal;
 
   mniCallStackInternal.push_back(name);
+
 
   if (mniRegistry.count(name)) {
 
@@ -1454,16 +1462,17 @@ void Interpreter::callMNI(const std::string &name,
 
     } catch (...) {
 
-      // Print stack trace on error
 
-      std::cerr << "MNI Call Stack (most recent call last):\n";
+        // Print stack trace on error only at the outermost call
+        std::cerr << "MNI Call Stack (most recent call last):\n";
 
-      for (auto it = mniCallStackInternal.rbegin();
-           it != mniCallStackInternal.rend(); ++it) {
+        for (auto it = mniCallStackInternal.rbegin();
+             it != mniCallStackInternal.rend(); ++it) {
 
-        std::cerr << "  at " << *it << std::endl;
-      }
-
+          std::cerr << "  at " << *it << std::endl;
+        }
+    
+      
       mniCallStackInternal.pop_back();
 
       throw;
@@ -1505,6 +1514,7 @@ int microasm_interpreter_main(int argc, char *argv[]) {
               << std::endl;
     return 1;
   }
+
   // --- End Argument Parsing ---
 
   try {
