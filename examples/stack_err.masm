@@ -1,0 +1,39 @@
+lbl add
+    ; Setup Stack Frame
+    enter
+
+        MOVADDR rax rsp 8 ; get A
+        MOVADDR rbx rsp 12 ; get B
+        add rax RBX
+        mov rdx rax ; store rax because it is overriden in print_stack
+
+        MOVADDR rcx 10000 1000000
+
+        mov rax rdx
+
+    ; Exit stack frame
+    leave
+    ret
+
+lbl main
+mov rbp 0
+call #rmain
+hlt
+
+lbl rmain
+    ; Setup Stack Frame
+    enter
+
+        push 2 ; B
+        push 1 ; A
+        call #add
+        out 1 $100
+        out 1 RAX
+        cout 1 10
+
+    ; Exit stack frame
+    leave
+    ret
+
+; data:
+DB $100 "1 + 2 = "

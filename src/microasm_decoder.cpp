@@ -311,14 +311,15 @@ int decoder_main(int argc, char* argv[]) {
                 int opCount = getOperandCount(opcode);
                 if (opcode == MNI) {
                     mniFunc = readString(code, tempIp);
-                    int size = getOperandSize(code[tempIp]);
                     // while (tempIp + 1 + size <= code.size()) {
                     while (true) {
-                        OperandType t = static_cast<OperandType>(code[tempIp++] & 15);
+                        int size = getOperandSize(code[tempIp]);
+                        OperandType t = static_cast<OperandType>(code[tempIp] & 15);
+                        tempIp++;
+                        if (t == NONE) break;
                         int v = *reinterpret_cast<const int*>(&code[tempIp]);
                         if (size != 4) v &= (1 << (8*size))-1;
                         tempIp += size;
-                        if (t == NONE) break;
                         operands.emplace_back(t, v);
                         if (t == DATA_ADDRESS) referencedDataOffsets.insert(v);
                     }

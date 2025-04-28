@@ -28,6 +28,11 @@ extern std::map<std::string, MniFunctionType> mniRegistry;
 // Declare the function to register MNI functions
 void registerMNI(const std::string& module, const std::string& name, MniFunctionType func);
 
+struct stack_frame {
+    uint32_t rbp;
+    uint32_t ip;
+};
+
 class Interpreter {
 public: // Public members needed by C API or main
     std::vector<int> registers; // [0]=RAX, [1]=RBX, ..., [6]=RBP, [7]=RSP, [8]=R0, ..., [23]=R15
@@ -41,6 +46,7 @@ private: // Private members
 
     std::vector<std::string> cmdArgs;
     bool debugMode = false;
+    bool stackTrace = false;
 
     // Private methods
     BytecodeOperand nextRawOperand();
@@ -54,10 +60,9 @@ private: // Private members
 
 public: // Public methods including memory access for C API
     // Constructor
-     
 
     void callMNI(const std::string& name, const std::vector<BytecodeOperand>& args);
-    Interpreter(int ramSize = 65536, const std::vector<std::string>& args = {}, bool debug = false);
+    Interpreter(int ramSize = 65536, const std::vector<std::string>& args = {}, bool debug = false, bool trace = false);
     bool zeroFlag = false;
     bool signFlag = false;
     // Memory access helpers (already public)

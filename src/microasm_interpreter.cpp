@@ -20,6 +20,8 @@ std::vector<std::string> mniCallStack;
 // Global registry for MNI functions (define only in ONE .cpp file)
 std::map<std::string, MniFunctionType> mniRegistry;
 
+std::unordered_map<int, std::string> lbls; // known labels
+
 // Define the MNI registration function
 void registerMNI(const std::string &module, const std::string &name,
                  MniFunctionType func) {
@@ -36,17 +38,21 @@ void registerMNI(const std::string &module, const std::string &name,
 
 // --- Interpreter Method Definitions ---
 
-Interpreter::Interpreter(int ramSize, const std::vector<std::string> &args,
-                         bool debug)
-    : registers(24, 0), ram(ramSize, 0), cmdArgs(args), debugMode(debug) {
-  // Initialize Stack Pointer (RSP, index 7) to top of RAM
-  registers[7] = ramSize;
-  sp = registers[7];
-  // Base Pointer (RBP, index 6) can be initialized similarly or left 0
-  registers[6] = ramSize;
-  bp = registers[6];
-  // Set data segment base - let's put it in the middle for now
-  // Ensure this doesn't collide with stack growing down!
+Interpreter::Interpreter(int ramSize, const std::vector<std::string>& args, bool debug, bool trace)
+    : registers(24, 0),
+      ram(ramSize, 0),
+      cmdArgs(args),
+      debugMode(debug),
+      stackTrace(trace)
+{
+    // Initialize Stack Pointer (RSP, index 7) to top of RAM
+    registers[7] = ramSize;
+    sp = registers[7];
+    // Base Pointer (RBP, index 6) is initalized to zero. Normal this will be set to junk but we can set it to zero.
+    registers[6] = 0;
+    bp = registers[6];
+    // Set data segment base - let's put it in the middle for now
+    // Ensure this doesn't collide with stack growing down!
 
   // Initialize MNI functions
   initializeMNIFunctions();
@@ -351,27 +357,43 @@ void Interpreter::load(const std::string &bytecodeFile) {
     }
   }
 
-  // 4. Load Data Segment into RAM at dataSegmentBase
-  if (header.dataSize > 0) {
-    if (header.dataSize > ram.size()) {
-      throw std::runtime_error("RAM size (" + std::to_string(ram.size()) +
-                               ") too small for data segment (size " +
-                               std::to_string(header.dataSize) + ")");
+    // 4. Load Data Segment into RAM at dataSegmentBase
+    if (header.dataSize > 0) {
+        if (header.dataSize > ram.size()) {
+            throw std::runtime_error("RAM size (" + std::to_string(ram.size()) + ") too small for data segment (size " + std::to_string(header.dataSize) + ")");
+        }
+        char* data = (char*)malloc(header.dataSize * sizeof(char));
+        char* tmp_data = data;
+        in.read(data, header.dataSize);
+        while (data < tmp_data+header.dataSize) {
+            int16_t addr = *(int16_t*)&data[0];
+            int16_t size = *(int16_t*)&data[2];
+            data += 4;
+            for (int i=0;i<size;i++) {
+                ram[addr+i] = data[i];
+            }
+            data += size;
+        }
+        free((char*)tmp_data);
     }
-    char *data = (char *)malloc(header.dataSize * sizeof(char));
-    char *tmp_data = data;
-    in.read(data, header.dataSize);
-    while (data < tmp_data + header.dataSize) {
-      int16_t addr = *(int16_t *)&data[0];
-      int16_t size = *(int16_t *)&data[2];
-      data += 4;
-      for (int i = 0; i < size; i++) {
-        ram[addr + i] = data[i];
-      }
-      data += size;
+    
+    if (header.dataSize > 0) {
+        char* dbg = (char*)malloc(header.dbgSize);
+        char* dbg_og = dbg;
+
+        in.seekg(sizeof(BinaryHeader) + header.codeSize + header.dataSize);
+        in.read((char*)dbg, header.dbgSize);
+        in.seekg(sizeof(BinaryHeader));
+
+        while (dbg < dbg_og + header.dbgSize) {
+            std::string str = dbg;
+            dbg += (strlen(dbg) + 1);
+            int addr = *(int*)dbg;
+            dbg += sizeof(int);
+            lbls[addr] = str;
+        }
+        free(dbg_og);
     }
-    free((char *)tmp_data);
-  }
 
   // Check if we read exactly the expected amount
   in.peek(); // Try to read one more byte
@@ -419,6 +441,10 @@ void Interpreter::setDebugMode(bool enabled) {
     std::cout << "[Debug][Interpreter] Debug mode explicitly set to: "
               << (enabled ? "ON" : "OFF") << "\n";
   }
+}
+
+std::string getAddr(int ip, std::vector<char> dbgData) {
+
 }
 
 void Interpreter::execute() {
@@ -1301,6 +1327,19 @@ void Interpreter::execute() {
           std::cerr << "  at " << *it << std::endl;
         }
       }
+      std::cerr << "\nRuntime Error at bytecode offset 0x" << std::hex << currentIp << std::dec << " (Opcode: 0x" << std::hex << static_cast<int>(opcode) << std::dec << "): " << e.what() << std::endl;
+        // Stack trace if -t or --trace
+        if (stackTrace) {
+            struct stack_frame frame;
+            frame.rbp = registers[6]; // ebp
+            frame.ip = ip;
+
+            while (frame.rbp != 0) {
+                std::cout << getAddr(frame.ip) << std::endl;
+                frame.ip = readRamInt(frame.rbp+4);
+                frame.rbp = readRamInt(frame.rbp);
+            }
+        }
       static const char *regNames[24] = {
 
           "RAX", "RBX", "RCX", "RDX", "RSI",
@@ -1442,75 +1481,62 @@ void Interpreter::callMNI(const std::string &name,
 
   // Use a static thread_local call stack for MNI stack tracing
 
-  static thread_local std::vector<std::string> mniCallStackInternal;
-
-  mniCallStackInternal.push_back(name);
-
-  if (mniRegistry.count(name)) {
-
-    try {
-
-      mniRegistry[name](*this, args);
-
-    } catch (...) {
-
-      // Print stack trace on error
-
-      std::cerr << "MNI Call Stack (most recent call last):\n";
-
-      for (auto it = mniCallStackInternal.rbegin();
-           it != mniCallStackInternal.rend(); ++it) {
-
-        std::cerr << "  at " << *it << std::endl;
-      }
-
-      mniCallStackInternal.pop_back();
-
-      throw;
+    static thread_local std::vector<std::string> mniCallStackInternal;
+    mniCallStackInternal.push_back(name);
+    if (mniRegistry.count(name)) {
+        try {
+            mniRegistry[name](*this, args);
+        } catch (...) {
+        // Print stack trace on error
+            std::cerr << "MNI Call Stack (most recent call last):\n";
+            for (auto it = mniCallStackInternal.rbegin();
+                it != mniCallStackInternal.rend(); ++it) {
+                std::cerr << "  at " << *it << std::endl;
+            }
+            mniCallStackInternal.pop_back();
+            throw;
+        }
+    } else {
+        mniCallStackInternal.pop_back();
+        throw std::runtime_error("Unregistered MNI function called: " + name);
     }
-
-  } else {
-
     mniCallStackInternal.pop_back();
-
-    throw std::runtime_error("Unregistered MNI function called: " + name);
-  }
-
-  mniCallStackInternal.pop_back();
 }
 
 // --- Standalone Interpreter Main Function Definition ---
 
-int microasm_interpreter_main(int argc, char *argv[]) {
-  // --- Argument Parsing for Standalone Interpreter ---
-  std::string bytecodeFile;
-  bool enableDebug = false;
-  std::vector<std::string> programArgs; // Args for the interpreted program
+int microasm_interpreter_main(int argc, char* argv[]) {
+    // --- Argument Parsing for Standalone Interpreter ---
+    std::string bytecodeFile;
+    bool enableDebug = false;
+    bool stackTrace = false;
+    std::vector<std::string> programArgs; // Args for the interpreted program
 
-  // argv[0] here is the *first argument* after "-i", not the program name
-  for (int i = 0; i < argc; ++i) {
-    std::string arg = argv[i];
-    if (arg == "-d" || arg == "--debug") {
-      enableDebug = true;
-    } else if (bytecodeFile.empty()) {
-      bytecodeFile = arg;
-    } else {
-      // Remaining args are for the program being interpreted
-      programArgs.push_back(arg);
+    // argv[0] here is the *first argument* after "-i", not the program name
+    for (int i = 0; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "-d" || arg == "--debug") {
+            enableDebug = true;
+        } else if (arg == "-t" || arg == "--trace") {
+            stackTrace = true;
+        } else if (bytecodeFile.empty()) {
+            bytecodeFile = arg;
+        } else {
+            // Remaining args are for the program being interpreted
+            programArgs.push_back(arg);
+        }
     }
-  }
 
-  if (bytecodeFile.empty()) {
-    std::cerr << "Interpreter Usage: <bytecode.bin> [args...] [-d|--debug]"
-              << std::endl;
-    return 1;
-  }
-  // --- End Argument Parsing ---
+    if (bytecodeFile.empty()) {
+        std::cerr << "Interpreter Usage: <bytecode.bin> [args...] [-d|--debug]" << std::endl;
+        return 1;
+    }
+    // --- End Argument Parsing ---
 
-  try {
-    Interpreter interpreter(65536, programArgs, enableDebug); // Pass debug flag
-    interpreter.load(bytecodeFile);
-    interpreter.execute();
+    try {
+        Interpreter interpreter(65536, programArgs, enableDebug, stackTrace); // Pass debug flag
+        interpreter.load(bytecodeFile);
+        interpreter.execute();
 
     std::cout << "Execution finished successfully!"
               << std::endl; // HLT used to provide its own message
