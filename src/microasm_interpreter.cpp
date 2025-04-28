@@ -24,338 +24,345 @@ std::unordered_map<int, std::string> lbls; // known labels
 
 // Define the MNI registration function
 void registerMNI(const std::string &module, const std::string &name,
-                 MniFunctionType func) {
-  std::string fullName = module + "." + name;
-  if (mniRegistry.find(fullName) == mniRegistry.end()) {
-    mniRegistry[fullName] = func;
-    // Optional: Keep debug print here if desired
-    // std::cout << "Registered MNI function: " << fullName << std::endl;
-  } else {
-    std::cerr << "Warning: MNI function " << fullName << " already registered."
-              << std::endl;
-  }
+                    MniFunctionType func) {
+    std::string fullName = module + "." + name;
+    if (mniRegistry.find(fullName) == mniRegistry.end()) {
+        mniRegistry[fullName] = func;
+        // Optional: Keep debug print here if desired
+        // std::cout << "Registered MNI function: " << fullName << std::endl;
+    } else {
+        std::cerr << "Warning: MNI function " << fullName << " already registered."
+                << std::endl;
+    }
 }
 
 // --- Interpreter Method Definitions ---
 
 Interpreter::Interpreter(int ramSize, const std::vector<std::string>& args, bool debug, bool trace)
-    : registers(24, 0),
-      ram(ramSize, 0),
-      cmdArgs(args),
-      debugMode(debug),
-      stackTrace(trace)
+        : registers(24, 0),
+        ram(ramSize, 0),
+        cmdArgs(args),
+        debugMode(debug),
+        stackTrace(trace)
 {
-    // Initialize Stack Pointer (RSP, index 7) to top of RAM
-    registers[7] = ramSize;
-    sp = registers[7];
-    // Base Pointer (RBP, index 6) is initalized to zero. Normal this will be set to junk but we can set it to zero.
-    registers[6] = 0;
-    bp = registers[6];
-    // Set data segment base - let's put it in the middle for now
-    // Ensure this doesn't collide with stack growing down!
+        // Initialize Stack Pointer (RSP, index 7) to top of RAM
+        registers[7] = ramSize;
+        sp = registers[7];
+        // Base Pointer (RBP, index 6) is initalized to zero. Normal this will be set to junk but we can set it to zero.
+        registers[6] = 0;
+        bp = registers[6];
+        // Set data segment base - let's put it in the middle for now
+        // Ensure this doesn't collide with stack growing down!
 
-  // Initialize MNI functions
-  initializeMNIFunctions();
+    // Initialize MNI functions
+    initializeMNIFunctions();
 
-  if (debugMode)
-    std::cout << "[Debug][Interpreter] Debug mode enabled. RAM Size: "
-              << ramSize << "\n";
+    if (debugMode)
+        std::cout << "[Debug][Interpreter] Debug mode enabled. RAM Size: "
+                << ramSize << "\n";
 }
 
 int Interpreter::getOperandSize(char type) {
-  if (type == '\0') {
-    return 1;
-  }
-  int ret = type >> 4;
-  if (ret == 0)
-    ret = 4;
-  return ret;
+    if (type == '\0') {
+        return 1;
+    }
+    int ret = type >> 4;
+    if (ret == 0)
+        ret = 4;
+    return ret;
 }
 
 BytecodeOperand Interpreter::nextRawOperand() {
-  int size = getOperandSize(bytecode_raw[ip]);
-  if (ip + 1 + size >
-      bytecode_raw.size()) { // Check size for type byte + value int
-    throw std::runtime_error(
-        "Unexpected end of bytecode reading typed operand (IP: " +
-        std::to_string(ip) +
-        ", CodeSize: " + std::to_string(bytecode_raw.size()) + ")");
-  }
-  BytecodeOperand operand;
-  operand.type = static_cast<OperandType>(bytecode_raw[ip++] & 15);
-  // Handle NONE type immediately if needed (though it shouldn't be read here
-  // usually)
-  if (operand.type == OperandType::NONE) {
-    operand.value = 0; // No value associated
-    // ip adjustment might depend on how NONE is encoded (e.g., if it has a
-    // dummy value) Assuming it's just the type byte based on compiler code for
-    // MNI marker
-  } else {
-    if (ip + size > bytecode_raw.size()) {
-      throw std::runtime_error(
-          "Unexpected end of bytecode reading operand value (IP: " +
-          std::to_string(ip) + ")");
+    int size = getOperandSize(bytecode_raw[ip]);
+    if (ip + 1 + size >
+        bytecode_raw.size()) { // Check size for type byte + value int
+        throw std::runtime_error(
+            "Unexpected end of bytecode reading typed operand (IP: " +
+            std::to_string(ip) +
+            ", CodeSize: " + std::to_string(bytecode_raw.size()) + ")");
     }
-    operand.value = *reinterpret_cast<const int *>(&bytecode_raw[ip]);
-    if (size != 4)
-      operand.value &= (1 << (8 * size)) - 1;
-    ip += size;
-  }
-  return operand;
+    BytecodeOperand operand;
+    operand.type = static_cast<OperandType>(bytecode_raw[ip++] & 15);
+    // Handle NONE type immediately if needed (though it shouldn't be read here
+    // usually)
+    if (operand.type == OperandType::NONE) {
+        operand.value = 0; // No value associated
+        // ip adjustment might depend on how NONE is encoded (e.g., if it has a
+        // dummy value) Assuming it's just the type byte based on compiler code for
+        // MNI marker
+    } else {
+        if (ip + size > bytecode_raw.size()) {
+        throw std::runtime_error(
+            "Unexpected end of bytecode reading operand value (IP: " +
+            std::to_string(ip) + ")");
+        }
+        operand.value = *reinterpret_cast<const int *>(&bytecode_raw[ip]);
+        if (size != 4)
+        operand.value &= (1 << (8 * size)) - 1;
+        ip += size;
+    }
+    return operand;
 }
 
 int Interpreter::getValue(const BytecodeOperand &operand) {
-  switch (operand.type) {
-  case OperandType::REGISTER:
-    if (operand.value < 0 || operand.value >= registers.size()) {
-      throw std::runtime_error("Invalid register index encountered: " +
-                               std::to_string(operand.value));
-    }
-    return registers[operand.value];
-  case OperandType::REGISTER_AS_ADDRESS: // For getValue, treat same as REGISTER
-                                         // (return content)
-    if (operand.value < 0 || operand.value >= registers.size()) {
-      throw std::runtime_error("Invalid register index encountered: " +
-                               std::to_string(operand.value));
-    }
+    switch (operand.type) {
+    case OperandType::REGISTER:
+        if (operand.value < 0 || operand.value >= registers.size()) {
+        throw std::runtime_error("Invalid register index encountered: " +
+                                std::to_string(operand.value));
+        }
+        return registers[operand.value];
+    case OperandType::REGISTER_AS_ADDRESS: // For getValue, treat same as REGISTER
+                                            // (return content)
+        if (operand.value < 0 || operand.value >= registers.size()) {
+        throw std::runtime_error("Invalid register index encountered: " +
+                                std::to_string(operand.value));
+        }
 
-    return ram[registers[operand.value]];
-  case OperandType::IMMEDIATE:
-  case OperandType::LABEL_ADDRESS: // Addresses are immediate values in bytecode
-    return operand.value;
-  case OperandType::DATA_ADDRESS:
-    // Return the absolute RAM address (Base + Offset)
-    // dataSegmentBase is now correctly set during loading
-    if (operand.value < 0 || operand.value >= ram.size()) {
-      throw std::runtime_error("Data address out of RAM bounds: Addr=" +
-                               std::to_string(operand.value));
+        return ram[registers[operand.value]];
+    case OperandType::IMMEDIATE:
+    case OperandType::LABEL_ADDRESS: // Addresses are immediate values in bytecode
+        return operand.value;
+    case OperandType::DATA_ADDRESS:
+        // Return the absolute RAM address (Base + Offset)
+        // dataSegmentBase is now correctly set during loading
+        if (operand.value < 0 || operand.value >= ram.size()) {
+            throw std::runtime_error("Data address out of RAM bounds: Addr=" +
+                                    std::to_string(operand.value));
+        }
+        return ram[operand.value];
+    default:
+        throw std::runtime_error(
+            "Cannot get value for unknown or invalid operand type: " +
+            std::to_string(static_cast<int>(operand.type)));
     }
-    return ram[operand.value];
-  default:
-    throw std::runtime_error(
-        "Cannot get value for unknown or invalid operand type: " +
-        std::to_string(static_cast<int>(operand.type)));
-  }
 }
 
 int Interpreter::getRegisterIndex(const BytecodeOperand &operand) {
-  if (operand.type != OperandType::REGISTER) {
-    throw std::runtime_error("Expected register operand, got type " +
-                             std::to_string(static_cast<int>(operand.type)));
-  }
-  if (operand.value < 0 || operand.value >= registers.size()) {
-    throw std::runtime_error("Invalid register index encountered: " +
-                             std::to_string(operand.value));
-  }
-  return operand.value;
+    if (operand.type != OperandType::REGISTER) {
+        throw std::runtime_error("Expected register operand, got type " +
+                                std::to_string(static_cast<int>(operand.type)));
+    }
+    if (operand.value < 0 || operand.value >= registers.size()) {
+        throw std::runtime_error("Invalid register index encountered: " +
+                                std::to_string(operand.value));
+    }
+    return operand.value;
 }
 
 int Interpreter::readRamInt(int address) {
-  if (address < 0 || address + sizeof(int) > ram.size()) {
-    throw std::runtime_error("Memory read out of bounds at address: " +
-                             std::to_string(address));
-  }
+    if (address < 0 || address + sizeof(int) > ram.size()) {
+        throw std::runtime_error("Memory read out of bounds at address: " +
+                                std::to_string(address));
+    }
   return *reinterpret_cast<int *>(&ram[address]);
 }
 
 void Interpreter::writeRamInt(int address, int value) {
-  if (address < 0 || address + sizeof(int) > ram.size()) {
-    throw std::runtime_error("Memory write out of bounds at address: " +
-                             std::to_string(address));
-  }
+    if (address < 0 || address + sizeof(int) > ram.size()) {
+        throw std::runtime_error("Memory write out of bounds at address: " +
+                                std::to_string(address));
+    }
   *reinterpret_cast<int *>(&ram[address]) = value;
 }
 
 char Interpreter::readRamChar(int address) {
-  if (address < 0 || address >= ram.size()) {
-    throw std::runtime_error("Memory read out of bounds at address: " +
-                             std::to_string(address));
-  }
-  return ram[address];
+    if (address < 0 || address >= ram.size()) {
+        throw std::runtime_error("Memory read out of bounds at address: " +
+                                std::to_string(address));
+    }
+    return ram[address];
 }
 
 void Interpreter::writeRamChar(int address, char value) {
-  if (address < 0 || address >= ram.size()) {
-    throw std::runtime_error("Memory write out of bounds at address: " +
-                             std::to_string(address));
-  }
-  ram[address] = value;
+    if (address < 0 || address >= ram.size()) {
+        throw std::runtime_error("Memory write out of bounds at address: " +
+                                std::to_string(address));
+    }
+    ram[address] = value;
 }
 
 std::string Interpreter::readRamString(int address) {
-  std::string str = "";
-  int currentAddr = address;
-  while (true) {
-    char c = readRamChar(currentAddr++);
-    if (c == '\0')
-      break;
-    str += c;
-  }
-  return str;
+    std::string str = "";
+    int currentAddr = address;
+    while (true) {
+        char c = readRamChar(currentAddr++);
+        if (c == '\0')
+        break;
+        str += c;
+    }
+    return str;
 }
 
 void Interpreter::pushStack(int value) {
-  registers[7] -= sizeof(int); // Decrement RSP (stack grows down)
-  sp = registers[7];
-  writeRamInt(sp, value);
+    registers[7] -= sizeof(int); // Decrement RSP (stack grows down)
+    sp = registers[7];
+    writeRamInt(sp, value);
 }
 
 int Interpreter::popStack() {
-  int value = readRamInt(sp);
-  registers[7] += sizeof(int); // Increment RSP
-  sp = registers[7];
-  return value;
+    int value = readRamInt(sp);
+    registers[7] += sizeof(int); // Increment RSP
+    sp = registers[7];
+    return value;
 }
 
 std::string Interpreter::readBytecodeString() {
-  std::string str = "";
-  while (ip < bytecode_raw.size()) {
-    char c = static_cast<char>(bytecode_raw[ip++]);
-    if (c == '\0') {
-      break;
+    std::string str = "";
+    while (ip < bytecode_raw.size()) {
+        char c = static_cast<char>(bytecode_raw[ip++]);
+        if (c == '\0') {
+        break;
+        }
+        str += c;
     }
-    str += c;
-  }
-  // Consider adding a check if ip reached end without null terminator
-  return str;
+    // Consider adding a check if ip reached end without null terminator
+    return str;
 }
 
 void Interpreter::initializeMNIFunctions() {
-  // Example: Math.sin R1 R2 (R1=input reg, R2=output reg)
-  registerMNI(
-      "Math", "sin",
-      [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
-        if (args.size() != 2)
-          throw std::runtime_error(
-              "Math.sin requires 2 arguments (srcReg, destReg)");
-        int srcReg = machine.getRegisterIndex(args[0]);
-        int destReg = machine.getRegisterIndex(args[1]);
-        // Note: Using double for calculation, storing as int
-        machine.registers[destReg] = static_cast<int>(
-            std::sin(static_cast<double>(machine.registers[srcReg])));
-      });
+    // Example: Math.sin R1 R2 (R1=input reg, R2=output reg)
+    registerMNI(
+        "Math", "sin",
+        [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
+            if (args.size() != 2)
+            throw std::runtime_error(
+                "Math.sin requires 2 arguments (srcReg, destReg)");
+            int srcReg = machine.getRegisterIndex(args[0]);
+            int destReg = machine.getRegisterIndex(args[1]);
+            // Note: Using double for calculation, storing as int
+            machine.registers[destReg] = static_cast<int>(
+                std::sin(static_cast<double>(machine.registers[srcReg])));
+        });
 
-  // Example: IO.write 1 R1 (Port=1/2, R1=address of null-terminated string in
-  // RAM)
-  registerMNI(
-      "IO", "write",
-      [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
-        if (args.size() != 2)
-          throw std::runtime_error(
-              "IO.write requires 2 arguments (port, addressReg/Imm)");
-        int port =
-            machine.getValue(args[0]); // Port can be immediate or register
-        int address =
-            machine.getValue(args[1]); // Address MUST resolve to a RAM location
-        if (args[1].type != OperandType::REGISTER &&
-            args[1].type != OperandType::DATA_ADDRESS &&
-            args[1].type != OperandType::IMMEDIATE) {
-          throw std::runtime_error(
-              "IO.write address argument must be register or data address");
-        }
+    // Example: IO.write 1 R1 (Port=1/2, R1=address of null-terminated string in
+    // RAM)
+    registerMNI(
+        "IO", "write",
+        [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
+            if (args.size() != 2)
+            throw std::runtime_error(
+                "IO.write requires 2 arguments (port, addressReg/Imm)");
+            int port =
+                machine.getValue(args[0]); // Port can be immediate or register
+            int address =
+                machine.getValue(args[1]); // Address MUST resolve to a RAM location
+            if (args[1].type != OperandType::REGISTER &&
+                args[1].type != OperandType::DATA_ADDRESS &&
+                args[1].type != OperandType::IMMEDIATE) {
+            throw std::runtime_error(
+                "IO.write address argument must be register or data address");
+            }
 
-        std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
-        if (port != 1 && port != 2)
-          throw std::runtime_error("Invalid port for IO.write: " +
-                                   std::to_string(port));
+            std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
+            if (port != 1 && port != 2)
+                throw std::runtime_error("Invalid port for IO.write: " +
+                                        std::to_string(port));
 
-        out_stream << machine.readRamString(
-            address); // Read null-terminated string from RAM
-      });
+            out_stream << machine.readRamString(
+                address); // Read null-terminated string from RAM
+        });
 
-  // this is a test of the recursive call's mni functions can do
-  // call without arguments from MNI then call it'self and then die on the 20th
-  // call.
-  registerMNI(
-      "Test", "recursiveCall",
-      [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
-        machine.pushStack(42);
-        int value = machine.popStack();
-        machine.registers[0] = value;
-      });
+    // this is a test of the recursive call's mni functions can do
+    // call without arguments from MNI then call it'self and then die on the 20th
+    // call.
+    registerMNI(
+        "Test", "recursiveCall",
+        [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
+            machine.pushStack(42);
+            int value = machine.popStack();
+            machine.registers[0] = value;
+        });
 
-  registerMNI(
-      "Test", "recursiveCallbreaker",
-      [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
-        if (args.size() != 1)
-          throw std::runtime_error(
-              "Test.recursiveCallbreaker requires 1 argument (count)");
-        int count = machine.getValue(args[0]);
-        if (count <= 0) {
-          std::cout << "Recursive call limit reached. Exiting." << std::endl;
-          return;
-        }
-        // Call the recursive function with decremented count
-        for (int i = 0; i < count; ++i) {
-          machine.callMNI("Test.recursiveCall", {});
-        }
-      });
+    registerMNI(
+        "Test", "recursiveCallbreaker",
+        [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
+            if (args.size() != 1)
+            throw std::runtime_error(
+                "Test.recursiveCallbreaker requires 1 argument (count)");
+            int count = machine.getValue(args[0]);
+            if (count <= 0) {
+            std::cout << "Recursive call limit reached. Exiting." << std::endl;
+            throw std::runtime_error(
+                "Test.recursiveCallbreaker reached max recursion depth: " +
+                std::to_string(count));
+            return;
+            }
+            // Call the recursive function with decremented count
+            for (int i = 0; i < count; ++i) {
+            machine.callMNI("Test.recursiveCall", {});
+            }
+            // Call the breaker function again with decremented count
+            machine.callMNI("Test.recursiveCallbreaker",
+                            {BytecodeOperand{OperandType::IMMEDIATE, count - 1}});
+            // Note: This will eventually lead to a stack overflow if not careful which is what we want
+        });
 
-  // Memory.allocate R1 R2 (R1=size, R2=destReg for address) - Needs heap
-  // management! StringOperations.concat R1 R2 R3 (R1=addr1, R2=addr2,
-  // R3=destAddr) - Needs memory allocation!
+    // Memory.allocate R1 R2 (R1=size, R2=destReg for address) - Needs heap
+    // management! StringOperations.concat R1 R2 R3 (R1=addr1, R2=addr2,
+    // R3=destAddr) - Needs memory allocation!
 }
 
 std::string Interpreter::formatOperandDebug(const BytecodeOperand &op) {
-  std::stringstream ss;
-  ss << "T:0x" << std::hex << static_cast<int>(op.type) << std::dec;
-  ss << " V:" << op.value;
-  switch (op.type) {
-  case OperandType::REGISTER:
-    ss << "(R" << op.value << ")";
-    break;
-  case OperandType::REGISTER_AS_ADDRESS:
-    ss << "($R" << op.value << ")";
-    break;
-  case OperandType::IMMEDIATE:
-    ss << "(Imm)";
-    break;
-  case OperandType::LABEL_ADDRESS:
-    ss << "(LblAddr)";
-    break;
-  case OperandType::DATA_ADDRESS:
-    ss << "(DataAddr 0x" << std::hex << (op.value) << std::dec << ")";
-    break;
-  default:
-    ss << "(?)";
-    break;
-  }
-  return ss.str();
+    std::stringstream ss;
+    ss << "T:0x" << std::hex << static_cast<int>(op.type) << std::dec;
+    ss << " V:" << op.value;
+    switch (op.type) {
+    case OperandType::REGISTER:
+        ss << "(R" << op.value << ")";
+        break;
+    case OperandType::REGISTER_AS_ADDRESS:
+        ss << "($R" << op.value << ")";
+        break;
+    case OperandType::IMMEDIATE:
+        ss << "(Imm)";
+        break;
+    case OperandType::LABEL_ADDRESS:
+        ss << "(LblAddr)";
+        break;
+    case OperandType::DATA_ADDRESS:
+        ss << "(DataAddr 0x" << std::hex << (op.value) << std::dec << ")";
+        break;
+    default:
+        ss << "(?)";
+        break;
+    }
+    return ss.str();
 }
 
 void Interpreter::load(const std::string &bytecodeFile) {
-  std::ifstream in(bytecodeFile, std::ios::binary);
-  if (!in)
-    throw std::runtime_error("Failed to open bytecode file: " + bytecodeFile);
+    std::ifstream in(bytecodeFile, std::ios::binary);
+    if (!in)
+        throw std::runtime_error("Failed to open bytecode file: " + bytecodeFile);
 
-  // 1. Read the header
-  BinaryHeader header;
-  if (!in.read(reinterpret_cast<char *>(&header), sizeof(header))) {
-    throw std::runtime_error("Failed to read header from bytecode file: " +
-                             bytecodeFile);
-  }
+    // 1. Read the header
+    BinaryHeader header;
+    if (!in.read(reinterpret_cast<char *>(&header), sizeof(header))) {
+        throw std::runtime_error("Failed to read header from bytecode file: " +
+                                bytecodeFile);
+    }
 
   // 2. Validate the header (basic magic number check)
-  if (header.magic != 0x4D53414D) { // "MASM"
-    throw std::runtime_error(
-        "Invalid magic number in bytecode file. Not a MASM binary.");
-  }
-  // Could add version checks here too
-  if (header.version > VERSION) {
-    throw std::runtime_error(
-        "Unsupported bytecode version: " + std::to_string(header.version) +
-        " (Supported version: 2)");
-  }
-
-  // 3. Load Code Segment into bytecode_raw
-  bytecode_raw.resize(header.codeSize);
-  if (header.codeSize > 0) {
-    if (!in.read(reinterpret_cast<char *>(bytecode_raw.data()),
-                 header.codeSize)) {
-      throw std::runtime_error("Failed to read code segment (expected " +
-                               std::to_string(header.codeSize) + " bytes)");
+    if (header.magic != 0x4D53414D) { // "MASM"
+        throw std::runtime_error(
+            "Invalid magic number in bytecode file. Not a MASM binary.");
     }
-  }
+    // Could add version checks here too
+    if (header.version > VERSION) {
+        throw std::runtime_error(
+            "Unsupported bytecode version: " + std::to_string(header.version) +
+            " (Supported version: 2)");
+    }
+
+    // 3. Load Code Segment into bytecode_raw
+    bytecode_raw.resize(header.codeSize);
+    if (header.codeSize > 0) {
+        if (!in.read(reinterpret_cast<char *>(bytecode_raw.data()),
+                    header.codeSize)) {
+        throw std::runtime_error("Failed to read code segment (expected " +
+                                std::to_string(header.codeSize) + " bytes)");
+        }
+    }
 
     // 4. Load Data Segment into RAM at dataSegmentBase
     if (header.dataSize > 0) {
@@ -395,52 +402,52 @@ void Interpreter::load(const std::string &bytecodeFile) {
         free(dbg_og);
     }
 
-  // Check if we read exactly the expected amount
-  in.peek(); // Try to read one more byte
-  if (!in.eof()) {
-    std::cerr << "Warning: Extra data found in bytecode file after code and "
-                 "data segments."
-              << std::endl;
-  }
+    // Check if we read exactly the expected amount
+    in.peek(); // Try to read one more byte
+    if (!in.eof()) {
+        std::cerr << "Warning: Extra data found in bytecode file after code and "
+                    "data segments."
+                << std::endl;
+    }
 
   // 5. Set Instruction Pointer to Entry Point
-  if (header.entryPoint >= header.codeSize &&
-      header.codeSize > 0) { // Allow entryPoint 0 for empty code
-    throw std::runtime_error("Entry point (" +
-                             std::to_string(header.entryPoint) +
-                             ") is outside the code segment (size " +
-                             std::to_string(header.codeSize) + ")");
-  }
-  ip = header.entryPoint;
+    if (header.entryPoint >= header.codeSize &&
+        header.codeSize > 0) { // Allow entryPoint 0 for empty code
+        throw std::runtime_error("Entry point (" +
+                                std::to_string(header.entryPoint) +
+                                ") is outside the code segment (size " +
+                                std::to_string(header.codeSize) + ")");
+    }
+    ip = header.entryPoint;
 
-  if (debugMode) {
-    std::cout << "[Debug][Interpreter] Loading bytecode from: " << bytecodeFile
-              << "\n";
-    std::cout << "[Debug][Interpreter]   Header - Magic: 0x" << std::hex
-              << header.magic << ", Version: " << std::dec << header.version
-              << ", CodeSize: " << header.codeSize
-              << ", DataSize: " << header.dataSize << ", EntryPoint: 0x"
-              << std::hex << header.entryPoint << std::dec << "\n";
-    std::cout << "[Debug][Interpreter]   Data Segment loaded" << "\n";
-    std::cout << "[Debug][Interpreter]   IP set to entry point: 0x" << std::hex
-              << ip << std::dec << "\n";
-  }
+    if (debugMode) {
+        std::cout << "[Debug][Interpreter] Loading bytecode from: " << bytecodeFile
+                << "\n";
+        std::cout << "[Debug][Interpreter]   Header - Magic: 0x" << std::hex
+                << header.magic << ", Version: " << std::dec << header.version
+                << ", CodeSize: " << header.codeSize
+                << ", DataSize: " << header.dataSize << ", EntryPoint: 0x"
+                << std::hex << header.entryPoint << std::dec << "\n";
+        std::cout << "[Debug][Interpreter]   Data Segment loaded" << "\n";
+        std::cout << "[Debug][Interpreter]   IP set to entry point: 0x" << std::hex
+                << ip << std::dec << "\n";
+    }
 }
 
 void Interpreter::setArguments(const std::vector<std::string> &args) {
-  cmdArgs = args;
-  if (debugMode) {
-    std::cout << "[Debug][Interpreter] Arguments set/updated. Count: "
-              << cmdArgs.size() << "\n";
-  }
+    cmdArgs = args;
+    if (debugMode) {
+        std::cout << "[Debug][Interpreter] Arguments set/updated. Count: "
+                << cmdArgs.size() << "\n";
+    }
 }
 
 void Interpreter::setDebugMode(bool enabled) {
-  debugMode = enabled;
-  if (debugMode) {
-    std::cout << "[Debug][Interpreter] Debug mode explicitly set to: "
-              << (enabled ? "ON" : "OFF") << "\n";
-  }
+    debugMode = enabled;
+    if (debugMode) {
+        std::cout << "[Debug][Interpreter] Debug mode explicitly set to: "
+                << (enabled ? "ON" : "OFF") << "\n";
+    }
 }
 
 std::string getAddr(int ip, std::vector<char> dbgData) {
@@ -1354,104 +1361,61 @@ void Interpreter::execute() {
       };
 
       // Dump registers with names and color
-
       std::cerr << "Register dump:\n";
-
       // Dump registers as an ASCII box (8 per row)
-
       const int regsPerRow = 8;
-
       const int totalRegs = registers.size();
-
       const int rows = (totalRegs + regsPerRow - 1) / regsPerRow;
-
       const int colWidth = 12; // Match hex value width
-
       std::cerr << "+" << std::string(regsPerRow * (colWidth + 1), '-')
                 << "+\n";
-
       for (int row = 0; row < rows; ++row) {
-
         // Header row: register names (centered, colWidth chars)
-
         std::cerr << "|";
-
         for (int col = 0; col < regsPerRow; ++col) {
-
           int idx = row * regsPerRow + col;
-
           if (idx < totalRegs) {
-
             std::string color;
-
             if (idx == 0)
               color = "\033[1;33m"; // RAX: yellow
-
             else if (idx == 6 || idx == 7)
               color = "\033[1;36m"; // RBP/RSP: cyan
-
             else
               color = "\033[1m";
-
             std::string name = regNames[idx];
-
             int pad = colWidth - name.length();
-
             int left = pad / 2, right = pad - left;
-
             std::cerr << color << std::string(left, ' ') << name
                       << std::string(right, ' ') << "\033[0m" << "|";
-
           } else {
-
             std::cerr << std::string(colWidth, ' ') << "|";
           }
         }
-
         std::cerr << "\n|";
-
         // Value row: decimal values (colWidth chars)
-
         for (int col = 0; col < regsPerRow; ++col) {
-
           int idx = row * regsPerRow + col;
-
           if (idx < totalRegs) {
-
             std::cerr << std::setw(colWidth) << registers[idx] << "|";
-
           } else {
-
             std::cerr << std::string(colWidth, ' ') << "|";
           }
         }
 
         std::cerr << "\n|";
-
         // Value row: hex values (colWidth chars)
-
         for (int col = 0; col < regsPerRow; ++col) {
-
           int idx = row * regsPerRow + col;
-
           if (idx < totalRegs) {
-
             std::stringstream hexss;
-
             hexss << "0x" << std::hex << std::setw(8) << std::setfill('0')
                   << registers[idx] << std::dec;
-
             std::string hexval = hexss.str();
-
             int pad = colWidth - hexval.length();
-
             int left = pad / 2, right = pad - left;
-
             std::cerr << std::string(left, ' ') << hexval
                       << std::string(right, ' ') << "|";
-
           } else {
-
             std::cerr << std::string(colWidth, ' ') << "|";
           }
         }
@@ -1475,6 +1439,7 @@ void Interpreter::executeStep() {
   // For now, lets just call execute() as a placeholder.
   execute();
 }
+static std::vector<std::string> mniCallStackInternal;
 
 void Interpreter::callMNI(const std::string &name,
                           const std::vector<BytecodeOperand> &args) {
@@ -1531,7 +1496,8 @@ int microasm_interpreter_main(int argc, char* argv[]) {
         std::cerr << "Interpreter Usage: <bytecode.bin> [args...] [-d|--debug]" << std::endl;
         return 1;
     }
-    // --- End Argument Parsing ---
+
+  // --- End Argument Parsing ---
 
     try {
         Interpreter interpreter(65536, programArgs, enableDebug, stackTrace); // Pass debug flag
