@@ -17,6 +17,7 @@ lbl add
 
 lbl main
 mov rbp 0
+enter
 call #rmain
 hlt
 

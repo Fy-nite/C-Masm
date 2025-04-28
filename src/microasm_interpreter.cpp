@@ -384,13 +384,11 @@ void Interpreter::load(const std::string &bytecodeFile) {
         free((char*)tmp_data);
     }
     
-    if (header.dataSize > 0) {
+    if (header.dbgSize > 0) {
         char* dbg = (char*)malloc(header.dbgSize);
         char* dbg_og = dbg;
 
-        in.seekg(sizeof(BinaryHeader) + header.codeSize + header.dataSize);
         in.read((char*)dbg, header.dbgSize);
-        in.seekg(sizeof(BinaryHeader));
 
         while (dbg < dbg_og + header.dbgSize) {
             std::string str = dbg;
@@ -450,8 +448,25 @@ void Interpreter::setDebugMode(bool enabled) {
     }
 }
 
-std::string getAddr(int ip, std::vector<char> dbgData) {
-
+std::string getAddr(int ip, std::unordered_map<int, std::string> dbgData) {
+    std::vector<std::pair<int, std::string>> dbgPair;
+    for (auto it = dbgData.begin(); it != dbgData.end(); ++it) {
+        dbgPair.push_back(std::make_pair(it->first, it->second));
+    }
+    std::pair<int, std::string> *closest = nullptr;
+    for (int idx=0;idx<dbgPair.size();idx++) {
+        int d = ip-dbgPair[idx].first;
+        if (d < 0) {
+            closest = &dbgPair[idx-1];
+            break;
+        }
+    }
+    if (closest == nullptr) {
+        closest = &dbgPair[dbgPair.size()-1];
+    }
+    std::string ret = closest->second;
+    ret += "+" + std::to_string(ip-closest->first) + "";
+    return ret;
 }
 
 void Interpreter::execute() {
@@ -1323,122 +1338,117 @@ void Interpreter::execute() {
       }
 
     } catch (const std::exception &e) {
-      // Print MNI stack trace if any
+        // Print MNI stack trace if any
 
-      if (!mniCallStack.empty()) {
-
-        std::cerr << "MNI Call Stack (most recent call last):\n";
-
-        for (auto it = mniCallStack.rbegin(); it != mniCallStack.rend(); ++it) {
-
-          std::cerr << "  at " << *it << std::endl;
+        if (!mniCallStack.empty()) {
+            std::cerr << "MNI Call Stack (most recent call last):\n";
+            for (auto it = mniCallStack.rbegin(); it != mniCallStack.rend(); ++it) {
+                std::cerr << "  at " << *it << std::endl;
+            }
         }
-      }
-      std::cerr << "\nRuntime Error at bytecode offset 0x" << std::hex << currentIp << std::dec << " (Opcode: 0x" << std::hex << static_cast<int>(opcode) << std::dec << "): " << e.what() << std::endl;
+        std::cerr << "\nRuntime Error at bytecode offset 0x" << std::hex << currentIp << std::dec << " (Opcode: 0x" << std::hex << static_cast<int>(opcode) << std::dec << "): " << e.what() << std::endl;
         // Stack trace if -t or --trace
         if (stackTrace) {
+            std::cerr << "\nStack Trace (most recent call first):\n";
             struct stack_frame frame;
             frame.rbp = registers[6]; // ebp
             frame.ip = ip;
 
             while (frame.rbp != 0) {
-                std::cout << getAddr(frame.ip) << std::endl;
+                std::cerr << getAddr(frame.ip, lbls) << std::endl;
                 frame.ip = readRamInt(frame.rbp+4);
                 frame.rbp = readRamInt(frame.rbp);
             }
+            std::cerr << "\n";
         }
-      static const char *regNames[24] = {
+        static const char *regNames[24] = {
 
-          "RAX", "RBX", "RCX", "RDX", "RSI",
-          "RDI", "RBP", "RSP",
+            "RAX", "RBX", "RCX", "RDX", "RSI",
+            "RDI", "RBP", "RSP",
 
-          "R0",  "R1",  "R2",  "R3",  "R4",
-          "R5",  "R6",  "R7",
+            "R0",  "R1",  "R2",  "R3",  "R4",
+            "R5",  "R6",  "R7",
 
-          "R8",  "R9",  "R10", "R11", "R12",
-          "R13", "R14", "R15"
+            "R8",  "R9",  "R10", "R11", "R12",
+            "R13", "R14", "R15"
 
-      };
+        };
 
-      // Dump registers with names and color
-      std::cerr << "Register dump:\n";
-      // Dump registers as an ASCII box (8 per row)
-      const int regsPerRow = 8;
-      const int totalRegs = registers.size();
-      const int rows = (totalRegs + regsPerRow - 1) / regsPerRow;
-      const int colWidth = 12; // Match hex value width
-      std::cerr << "+" << std::string(regsPerRow * (colWidth + 1), '-')
-                << "+\n";
-      for (int row = 0; row < rows; ++row) {
-        // Header row: register names (centered, colWidth chars)
-        std::cerr << "|";
-        for (int col = 0; col < regsPerRow; ++col) {
-          int idx = row * regsPerRow + col;
-          if (idx < totalRegs) {
-            std::string color;
-            if (idx == 0)
-              color = "\033[1;33m"; // RAX: yellow
-            else if (idx == 6 || idx == 7)
-              color = "\033[1;36m"; // RBP/RSP: cyan
-            else
-              color = "\033[1m";
-            std::string name = regNames[idx];
-            int pad = colWidth - name.length();
-            int left = pad / 2, right = pad - left;
-            std::cerr << color << std::string(left, ' ') << name
-                      << std::string(right, ' ') << "\033[0m" << "|";
-          } else {
-            std::cerr << std::string(colWidth, ' ') << "|";
-          }
-        }
-        std::cerr << "\n|";
-        // Value row: decimal values (colWidth chars)
-        for (int col = 0; col < regsPerRow; ++col) {
-          int idx = row * regsPerRow + col;
-          if (idx < totalRegs) {
-            std::cerr << std::setw(colWidth) << registers[idx] << "|";
-          } else {
-            std::cerr << std::string(colWidth, ' ') << "|";
-          }
-        }
-
-        std::cerr << "\n|";
-        // Value row: hex values (colWidth chars)
-        for (int col = 0; col < regsPerRow; ++col) {
-          int idx = row * regsPerRow + col;
-          if (idx < totalRegs) {
-            std::stringstream hexss;
-            hexss << "0x" << std::hex << std::setw(8) << std::setfill('0')
-                  << registers[idx] << std::dec;
-            std::string hexval = hexss.str();
-            int pad = colWidth - hexval.length();
-            int left = pad / 2, right = pad - left;
-            std::cerr << std::string(left, ' ') << hexval
-                      << std::string(right, ' ') << "|";
-          } else {
-            std::cerr << std::string(colWidth, ' ') << "|";
-          }
-        }
-
-        std::cerr << "\n+" << std::string(regsPerRow * (colWidth + 1), '-')
+        // Dump registers with names and color
+        std::cerr << "Register dump:\n";
+        // Dump registers as an ASCII box (8 per row)
+        const int regsPerRow = 8;
+        const int totalRegs = registers.size();
+        const int rows = (totalRegs + regsPerRow - 1) / regsPerRow;
+        const int colWidth = 12; // Match hex value width
+        std::cerr << "+" << std::string(regsPerRow * (colWidth+1) - 1, '-')
                   << "+\n";
-      }
+        for (int row = 0; row < rows; ++row) {
+          // Header row: register names (centered, colWidth chars)
+          std::cerr << "|";
+          for (int col = 0; col < regsPerRow; ++col) {
+            int idx = row * regsPerRow + col;
+            if (idx < totalRegs) {
+              std::string color;
+              if (idx == 0)
+                color = "\033[1;33m"; // RAX: yellow
+              else if (idx == 6 || idx == 7)
+                color = "\033[1;36m"; // RBP/RSP: cyan
+              else
+                color = "\033[1m";
+              std::string name = regNames[idx];
+              int pad = colWidth - name.length();
+              int left = pad / 2, right = pad - left;
+              std::cerr << color << std::string(left, ' ') << name
+                        << std::string(right, ' ') << "\033[0m" << "|";
+            } else {
+              std::cerr << std::string(colWidth, ' ') << "|";
+            }
+          }
+          std::cerr << "\n|";
+          // Value row: decimal values (colWidth chars)
+          for (int col = 0; col < regsPerRow; ++col) {
+            int idx = row * regsPerRow + col;
+            if (idx < totalRegs) {
+              std::cerr << std::setw(colWidth-1) << registers[idx] << " |";
+            } else {
+              std::cerr << std::string(colWidth, ' ') << "|";
+            }
+          }
 
-      std::cerr << "  ZF=" << zeroFlag << ", SF=" << signFlag << "\n";
+          std::cerr << "\n|";
+          // Value row: hex values (colWidth chars)
+          for (int col = 0; col < regsPerRow; ++col) {
+            int idx = row * regsPerRow + col;
+            if (idx < totalRegs) {
+              std::stringstream hexss;
+              hexss << "0x" << std::hex << std::setw(8) << std::setfill('0')
+                    << registers[idx] << std::dec;
+              std::string hexval = hexss.str();
+              int pad = colWidth - hexval.length();
+              int left = pad / 2, right = pad - left;
+              std::cerr << std::string(left, ' ') << hexval
+                        << std::string(right, ' ') << "|";
+            } else {
+              std::cerr << std::string(colWidth, ' ') << "|";
+            }
+          }
 
-      std::cerr << "\033[1;33mRAX\033[0m, \033[1;36mRBP/RSP\033[0m: special "
-                   "registers\n";
+          std::cerr << "\n+" << std::string(regsPerRow * (colWidth + 1) - 1, '-')
+                    << "+\n";
+        }
 
-      throw; // Re-throw after logging context
+        std::cerr << "  ZF=" << zeroFlag << ", SF=" << signFlag << "\n";
+
+        std::cerr << "\n";
+        // std::cerr << "\033[1;33mRAX\033[0m, \033[1;36mRBP/RSP\033[0m: special "
+        //              "registers\n";
+
+        throw; // Re-throw after logging context
     }
   }
 }
 
-void Interpreter::executeStep() {
-  // TODO: Implement single-instruction execution logic.
-  // For now, lets just call execute() as a placeholder.
-  execute();
-}
 static std::vector<std::string> mniCallStackInternal;
 
 void Interpreter::callMNI(const std::string &name,
@@ -1452,7 +1462,7 @@ void Interpreter::callMNI(const std::string &name,
         try {
             mniRegistry[name](*this, args);
         } catch (...) {
-        // Print stack trace on error
+            // Print stack trace on error
             std::cerr << "MNI Call Stack (most recent call last):\n";
             for (auto it = mniCallStackInternal.rbegin();
                 it != mniCallStackInternal.rend(); ++it) {
