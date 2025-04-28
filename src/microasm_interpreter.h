@@ -54,6 +54,9 @@ private: // Private members
 
 public: // Public methods including memory access for C API
     // Constructor
+     
+
+    void callMNI(const std::string& name, const std::vector<BytecodeOperand>& args);
     Interpreter(int ramSize = 65536, const std::vector<std::string>& args = {}, bool debug = false);
     bool zeroFlag = false;
     bool signFlag = false;
