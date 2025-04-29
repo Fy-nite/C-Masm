@@ -136,7 +136,6 @@ std::string Compiler::resolveIncludePath(const std::string& includePath) {
     fs::path resolvedPath;
 
     bool isLocal = includePath.find('/') != std::string::npos || includePath.find('\\') != std::string::npos;
-
     if (isLocal) {
         // Local include: relative to the current file's directory
         resolvedPath = fs::absolute(fs::path(currentFileDir) / pathObj);
