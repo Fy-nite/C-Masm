@@ -25,9 +25,7 @@ struct heap_data {
     int end;
 
     struct heap_chunk *chunks;
-    struct heap_chunk *free_chunks;
     int chunks_count;
-    int free_chunks_count;
 };
 
 struct heap_chunk {

@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "heap.h"
 std::vector<std::string> mniCallStack;
 #define VERSION 2
 // Include own header FIRST
@@ -54,6 +55,9 @@ Interpreter::Interpreter(int ramSize, const std::vector<std::string> &args,
 
     // Initialize MNI functions
     initializeMNIFunctions();
+
+    // Initialize Heap
+    heap_init();
 
     if (debugMode)
         std::cout << "[Debug][Interpreter] Debug mode enabled. RAM Size: "
@@ -632,6 +636,12 @@ void Interpreter::execute() {
                 break;
             case IN:
                 std::cout << "IN";
+                break;
+            case MALLOC:
+                std::cout << "MALLOC";
+                break;
+            case FREE:
+                std::cout << "FREE";
                 break;
             default:
                 std::cout << "???";
@@ -1320,6 +1330,27 @@ void Interpreter::execute() {
                 }
                 // Use memcmp directly
                 int result = memcmp(&ram[addr1], &ram[addr2], len);
+                zeroFlag = (result == 0);
+                signFlag = (result < 0);
+                break;
+            }
+            case MALLOC: { // MALLOC ptr_reg size
+                BytecodeOperand op_ptr = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(ptr): "
+                              << formatOperandDebug(op_ptr) << "\n";
+                BytecodeOperand op_size = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(size): "
+                              << formatOperandDebug(op_size) << "\n";
+
+                int ptr = getValue(op_ptr);
+                int size = getValue(op_size);
+
+                int result = mmalloc(size);
+
+                registers[ptr] = result; 
+                
                 zeroFlag = (result == 0);
                 signFlag = (result < 0);
                 break;

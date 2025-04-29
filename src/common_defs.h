@@ -55,6 +55,9 @@ enum Opcode {
     // Module Native Interface call
     MNI,
     IN,
+    // Heap
+    MALLOC,
+    FREE,
     // Pseudo-instructions (handled during compilation, not runtime)
     INCLUDE = 0xF2, // Placeholder for include directive logic (handled pre-compilation)
 };
