@@ -24,42 +24,40 @@ std::unordered_map<int, std::string> lbls; // known labels
 
 // Define the MNI registration function
 void registerMNI(const std::string &module, const std::string &name,
-                    MniFunctionType func) {
+                 MniFunctionType func) {
     std::string fullName = module + "." + name;
     if (mniRegistry.find(fullName) == mniRegistry.end()) {
         mniRegistry[fullName] = func;
         // Optional: Keep debug print here if desired
         // std::cout << "Registered MNI function: " << fullName << std::endl;
     } else {
-        std::cerr << "Warning: MNI function " << fullName << " already registered."
-                << std::endl;
+        std::cerr << "Warning: MNI function " << fullName
+                  << " already registered." << std::endl;
     }
 }
 
 // --- Interpreter Method Definitions ---
 
-Interpreter::Interpreter(int ramSize, const std::vector<std::string>& args, bool debug, bool trace)
-        : registers(24, 0),
-        ram(ramSize, 0),
-        cmdArgs(args),
-        debugMode(debug),
-        stackTrace(trace)
-{
-        // Initialize Stack Pointer (RSP, index 7) to top of RAM
-        registers[7] = ramSize;
-        sp = registers[7];
-        // Base Pointer (RBP, index 6) is initalized to zero. Normal this will be set to junk but we can set it to zero.
-        registers[6] = 0;
-        bp = registers[6];
-        // Set data segment base - let's put it in the middle for now
-        // Ensure this doesn't collide with stack growing down!
+Interpreter::Interpreter(int ramSize, const std::vector<std::string> &args,
+                         bool debug, bool trace)
+    : registers(24, 0), ram(ramSize, 0), cmdArgs(args), debugMode(debug),
+      stackTrace(trace) {
+    // Initialize Stack Pointer (RSP, index 7) to top of RAM
+    registers[7] = ramSize;
+    sp = registers[7];
+    // Base Pointer (RBP, index 6) is initalized to zero. Normal this will be
+    // set to junk but we can set it to zero.
+    registers[6] = 0;
+    bp = registers[6];
+    // Set data segment base - let's put it in the middle for now
+    // Ensure this doesn't collide with stack growing down!
 
     // Initialize MNI functions
     initializeMNIFunctions();
 
     if (debugMode)
         std::cout << "[Debug][Interpreter] Debug mode enabled. RAM Size: "
-                << ramSize << "\n";
+                  << ramSize << "\n";
 }
 
 int Interpreter::getOperandSize(char type) {
@@ -88,17 +86,17 @@ BytecodeOperand Interpreter::nextRawOperand() {
     if (operand.type == OperandType::NONE) {
         operand.value = 0; // No value associated
         // ip adjustment might depend on how NONE is encoded (e.g., if it has a
-        // dummy value) Assuming it's just the type byte based on compiler code for
-        // MNI marker
+        // dummy value) Assuming it's just the type byte based on compiler code
+        // for MNI marker
     } else {
         if (ip + size > bytecode_raw.size()) {
-        throw std::runtime_error(
-            "Unexpected end of bytecode reading operand value (IP: " +
-            std::to_string(ip) + ")");
+            throw std::runtime_error(
+                "Unexpected end of bytecode reading operand value (IP: " +
+                std::to_string(ip) + ")");
         }
         operand.value = *reinterpret_cast<const int *>(&bytecode_raw[ip]);
         if (size != 4)
-        operand.value &= (1 << (8 * size)) - 1;
+            operand.value &= (1 << (8 * size)) - 1;
         ip += size;
     }
     return operand;
@@ -108,27 +106,28 @@ int Interpreter::getValue(const BytecodeOperand &operand) {
     switch (operand.type) {
     case OperandType::REGISTER:
         if (operand.value < 0 || operand.value >= registers.size()) {
-        throw std::runtime_error("Invalid register index encountered: " +
-                                std::to_string(operand.value));
+            throw std::runtime_error("Invalid register index encountered: " +
+                                     std::to_string(operand.value));
         }
         return registers[operand.value];
-    case OperandType::REGISTER_AS_ADDRESS: // For getValue, treat same as REGISTER
-                                            // (return content)
+    case OperandType::REGISTER_AS_ADDRESS: // For getValue, treat same as
+                                           // REGISTER (return content)
         if (operand.value < 0 || operand.value >= registers.size()) {
-        throw std::runtime_error("Invalid register index encountered: " +
-                                std::to_string(operand.value));
+            throw std::runtime_error("Invalid register index encountered: " +
+                                     std::to_string(operand.value));
         }
 
         return ram[registers[operand.value]];
     case OperandType::IMMEDIATE:
-    case OperandType::LABEL_ADDRESS: // Addresses are immediate values in bytecode
+    case OperandType::LABEL_ADDRESS: // Addresses are immediate values in
+                                     // bytecode
         return operand.value;
     case OperandType::DATA_ADDRESS:
         // Return the absolute RAM address (Base + Offset)
         // dataSegmentBase is now correctly set during loading
         if (operand.value < 0 || operand.value >= ram.size()) {
             throw std::runtime_error("Data address out of RAM bounds: Addr=" +
-                                    std::to_string(operand.value));
+                                     std::to_string(operand.value));
         }
         return ram[operand.value];
     default:
@@ -140,12 +139,13 @@ int Interpreter::getValue(const BytecodeOperand &operand) {
 
 int Interpreter::getRegisterIndex(const BytecodeOperand &operand) {
     if (operand.type != OperandType::REGISTER) {
-        throw std::runtime_error("Expected register operand, got type " +
-                                std::to_string(static_cast<int>(operand.type)));
+        throw std::runtime_error(
+            "Expected register operand, got type " +
+            std::to_string(static_cast<int>(operand.type)));
     }
     if (operand.value < 0 || operand.value >= registers.size()) {
         throw std::runtime_error("Invalid register index encountered: " +
-                                std::to_string(operand.value));
+                                 std::to_string(operand.value));
     }
     return operand.value;
 }
@@ -153,23 +153,23 @@ int Interpreter::getRegisterIndex(const BytecodeOperand &operand) {
 int Interpreter::readRamInt(int address) {
     if (address < 0 || address + sizeof(int) > ram.size()) {
         throw std::runtime_error("Memory read out of bounds at address: " +
-                                std::to_string(address));
+                                 std::to_string(address));
     }
-  return *reinterpret_cast<int *>(&ram[address]);
+    return *reinterpret_cast<int *>(&ram[address]);
 }
 
 void Interpreter::writeRamInt(int address, int value) {
     if (address < 0 || address + sizeof(int) > ram.size()) {
         throw std::runtime_error("Memory write out of bounds at address: " +
-                                std::to_string(address));
+                                 std::to_string(address));
     }
-  *reinterpret_cast<int *>(&ram[address]) = value;
+    *reinterpret_cast<int *>(&ram[address]) = value;
 }
 
 char Interpreter::readRamChar(int address) {
     if (address < 0 || address >= ram.size()) {
         throw std::runtime_error("Memory read out of bounds at address: " +
-                                std::to_string(address));
+                                 std::to_string(address));
     }
     return ram[address];
 }
@@ -177,7 +177,7 @@ char Interpreter::readRamChar(int address) {
 void Interpreter::writeRamChar(int address, char value) {
     if (address < 0 || address >= ram.size()) {
         throw std::runtime_error("Memory write out of bounds at address: " +
-                                std::to_string(address));
+                                 std::to_string(address));
     }
     ram[address] = value;
 }
@@ -188,7 +188,7 @@ std::string Interpreter::readRamString(int address) {
     while (true) {
         char c = readRamChar(currentAddr++);
         if (c == '\0')
-        break;
+            break;
         str += c;
     }
     return str;
@@ -212,7 +212,7 @@ std::string Interpreter::readBytecodeString() {
     while (ip < bytecode_raw.size()) {
         char c = static_cast<char>(bytecode_raw[ip++]);
         if (c == '\0') {
-        break;
+            break;
         }
         str += c;
     }
@@ -226,8 +226,8 @@ void Interpreter::initializeMNIFunctions() {
         "Math", "sin",
         [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
             if (args.size() != 2)
-            throw std::runtime_error(
-                "Math.sin requires 2 arguments (srcReg, destReg)");
+                throw std::runtime_error(
+                    "Math.sin requires 2 arguments (srcReg, destReg)");
             int srcReg = machine.getRegisterIndex(args[0]);
             int destReg = machine.getRegisterIndex(args[1]);
             // Note: Using double for calculation, storing as int
@@ -241,31 +241,31 @@ void Interpreter::initializeMNIFunctions() {
         "IO", "write",
         [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
             if (args.size() != 2)
-            throw std::runtime_error(
-                "IO.write requires 2 arguments (port, addressReg/Imm)");
+                throw std::runtime_error(
+                    "IO.write requires 2 arguments (port, addressReg/Imm)");
             int port =
                 machine.getValue(args[0]); // Port can be immediate or register
-            int address =
-                machine.getValue(args[1]); // Address MUST resolve to a RAM location
+            int address = machine.getValue(
+                args[1]); // Address MUST resolve to a RAM location
             if (args[1].type != OperandType::REGISTER &&
                 args[1].type != OperandType::DATA_ADDRESS &&
                 args[1].type != OperandType::IMMEDIATE) {
-            throw std::runtime_error(
-                "IO.write address argument must be register or data address");
+                throw std::runtime_error("IO.write address argument must be "
+                                         "register or data address");
             }
 
             std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
             if (port != 1 && port != 2)
                 throw std::runtime_error("Invalid port for IO.write: " +
-                                        std::to_string(port));
+                                         std::to_string(port));
 
             out_stream << machine.readRamString(
                 address); // Read null-terminated string from RAM
         });
 
     // this is a test of the recursive call's mni functions can do
-    // call without arguments from MNI then call it'self and then die on the 20th
-    // call.
+    // call without arguments from MNI then call it'self and then die on the
+    // 20th call.
     registerMNI(
         "Test", "recursiveCall",
         [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
@@ -278,24 +278,27 @@ void Interpreter::initializeMNIFunctions() {
         "Test", "recursiveCallbreaker",
         [](Interpreter &machine, const std::vector<BytecodeOperand> &args) {
             if (args.size() != 1)
-            throw std::runtime_error(
-                "Test.recursiveCallbreaker requires 1 argument (count)");
+                throw std::runtime_error(
+                    "Test.recursiveCallbreaker requires 1 argument (count)");
             int count = machine.getValue(args[0]);
             if (count <= 0) {
-            std::cout << "Recursive call limit reached. Exiting." << std::endl;
-            throw std::runtime_error(
-                "Test.recursiveCallbreaker reached max recursion depth: " +
-                std::to_string(count));
-            return;
+                std::cout << "Recursive call limit reached. Exiting."
+                          << std::endl;
+                throw std::runtime_error(
+                    "Test.recursiveCallbreaker reached max recursion depth: " +
+                    std::to_string(count));
+                return;
             }
             // Call the recursive function with decremented count
             for (int i = 0; i < count; ++i) {
-            machine.callMNI("Test.recursiveCall", {});
+                machine.callMNI("Test.recursiveCall", {});
             }
             // Call the breaker function again with decremented count
-            machine.callMNI("Test.recursiveCallbreaker",
-                            {BytecodeOperand{OperandType::IMMEDIATE, count - 1}});
-            // Note: This will eventually lead to a stack overflow if not careful which is what we want
+            machine.callMNI(
+                "Test.recursiveCallbreaker",
+                {BytecodeOperand{OperandType::IMMEDIATE, count - 1}});
+            // Note: This will eventually lead to a stack overflow if not
+            // careful which is what we want
         });
 
     // Memory.allocate R1 R2 (R1=size, R2=destReg for address) - Needs heap
@@ -333,16 +336,17 @@ std::string Interpreter::formatOperandDebug(const BytecodeOperand &op) {
 void Interpreter::load(const std::string &bytecodeFile) {
     std::ifstream in(bytecodeFile, std::ios::binary);
     if (!in)
-        throw std::runtime_error("Failed to open bytecode file: " + bytecodeFile);
+        throw std::runtime_error("Failed to open bytecode file: " +
+                                 bytecodeFile);
 
     // 1. Read the header
     BinaryHeader header;
     if (!in.read(reinterpret_cast<char *>(&header), sizeof(header))) {
         throw std::runtime_error("Failed to read header from bytecode file: " +
-                                bytecodeFile);
+                                 bytecodeFile);
     }
 
-  // 2. Validate the header (basic magic number check)
+    // 2. Validate the header (basic magic number check)
     if (header.magic != 0x4D53414D) { // "MASM"
         throw std::runtime_error(
             "Invalid magic number in bytecode file. Not a MASM binary.");
@@ -358,42 +362,45 @@ void Interpreter::load(const std::string &bytecodeFile) {
     bytecode_raw.resize(header.codeSize);
     if (header.codeSize > 0) {
         if (!in.read(reinterpret_cast<char *>(bytecode_raw.data()),
-                    header.codeSize)) {
-        throw std::runtime_error("Failed to read code segment (expected " +
-                                std::to_string(header.codeSize) + " bytes)");
+                     header.codeSize)) {
+            throw std::runtime_error("Failed to read code segment (expected " +
+                                     std::to_string(header.codeSize) +
+                                     " bytes)");
         }
     }
 
     // 4. Load Data Segment into RAM at dataSegmentBase
     if (header.dataSize > 0) {
         if (header.dataSize > ram.size()) {
-            throw std::runtime_error("RAM size (" + std::to_string(ram.size()) + ") too small for data segment (size " + std::to_string(header.dataSize) + ")");
+            throw std::runtime_error("RAM size (" + std::to_string(ram.size()) +
+                                     ") too small for data segment (size " +
+                                     std::to_string(header.dataSize) + ")");
         }
-        char* data = (char*)malloc(header.dataSize * sizeof(char));
-        char* tmp_data = data;
+        char *data = (char *)malloc(header.dataSize * sizeof(char));
+        char *tmp_data = data;
         in.read(data, header.dataSize);
-        while (data < tmp_data+header.dataSize) {
-            int16_t addr = *(int16_t*)&data[0];
-            int16_t size = *(int16_t*)&data[2];
+        while (data < tmp_data + header.dataSize) {
+            int16_t addr = *(int16_t *)&data[0];
+            int16_t size = *(int16_t *)&data[2];
             data += 4;
-            for (int i=0;i<size;i++) {
-                ram[addr+i] = data[i];
+            for (int i = 0; i < size; i++) {
+                ram[addr + i] = data[i];
             }
             data += size;
         }
-        free((char*)tmp_data);
+        free((char *)tmp_data);
     }
-    
-    if (header.dbgSize > 0) {
-        char* dbg = (char*)malloc(header.dbgSize);
-        char* dbg_og = dbg;
 
-        in.read((char*)dbg, header.dbgSize);
+    if (header.dbgSize > 0) {
+        char *dbg = (char *)malloc(header.dbgSize);
+        char *dbg_og = dbg;
+
+        in.read((char *)dbg, header.dbgSize);
 
         while (dbg < dbg_og + header.dbgSize) {
             std::string str = dbg;
             dbg += (strlen(dbg) + 1);
-            int addr = *(int*)dbg;
+            int addr = *(int *)dbg;
             dbg += sizeof(int);
             lbls[addr] = str;
         }
@@ -403,32 +410,33 @@ void Interpreter::load(const std::string &bytecodeFile) {
     // Check if we read exactly the expected amount
     in.peek(); // Try to read one more byte
     if (!in.eof()) {
-        std::cerr << "Warning: Extra data found in bytecode file after code and "
-                    "data segments."
-                << std::endl;
+        std::cerr
+            << "Warning: Extra data found in bytecode file after code and "
+               "data segments."
+            << std::endl;
     }
 
-  // 5. Set Instruction Pointer to Entry Point
+    // 5. Set Instruction Pointer to Entry Point
     if (header.entryPoint >= header.codeSize &&
         header.codeSize > 0) { // Allow entryPoint 0 for empty code
         throw std::runtime_error("Entry point (" +
-                                std::to_string(header.entryPoint) +
-                                ") is outside the code segment (size " +
-                                std::to_string(header.codeSize) + ")");
+                                 std::to_string(header.entryPoint) +
+                                 ") is outside the code segment (size " +
+                                 std::to_string(header.codeSize) + ")");
     }
     ip = header.entryPoint;
 
     if (debugMode) {
-        std::cout << "[Debug][Interpreter] Loading bytecode from: " << bytecodeFile
-                << "\n";
+        std::cout << "[Debug][Interpreter] Loading bytecode from: "
+                  << bytecodeFile << "\n";
         std::cout << "[Debug][Interpreter]   Header - Magic: 0x" << std::hex
-                << header.magic << ", Version: " << std::dec << header.version
-                << ", CodeSize: " << header.codeSize
-                << ", DataSize: " << header.dataSize << ", EntryPoint: 0x"
-                << std::hex << header.entryPoint << std::dec << "\n";
+                  << header.magic << ", Version: " << std::dec << header.version
+                  << ", CodeSize: " << header.codeSize
+                  << ", DataSize: " << header.dataSize << ", EntryPoint: 0x"
+                  << std::hex << header.entryPoint << std::dec << "\n";
         std::cout << "[Debug][Interpreter]   Data Segment loaded" << "\n";
-        std::cout << "[Debug][Interpreter]   IP set to entry point: 0x" << std::hex
-                << ip << std::dec << "\n";
+        std::cout << "[Debug][Interpreter]   IP set to entry point: 0x"
+                  << std::hex << ip << std::dec << "\n";
     }
 }
 
@@ -436,7 +444,7 @@ void Interpreter::setArguments(const std::vector<std::string> &args) {
     cmdArgs = args;
     if (debugMode) {
         std::cout << "[Debug][Interpreter] Arguments set/updated. Count: "
-                << cmdArgs.size() << "\n";
+                  << cmdArgs.size() << "\n";
     }
 }
 
@@ -444,7 +452,7 @@ void Interpreter::setDebugMode(bool enabled) {
     debugMode = enabled;
     if (debugMode) {
         std::cout << "[Debug][Interpreter] Debug mode explicitly set to: "
-                << (enabled ? "ON" : "OFF") << "\n";
+                  << (enabled ? "ON" : "OFF") << "\n";
     }
 }
 
@@ -454,999 +462,1041 @@ std::string getAddr(int ip, std::unordered_map<int, std::string> dbgData) {
         dbgPair.push_back(std::make_pair(it->first, it->second));
     }
     std::pair<int, std::string> *closest = nullptr;
-    for (int idx=0;idx<dbgPair.size();idx++) {
-        int d = ip-dbgPair[idx].first;
+    for (int idx = 0; idx < dbgPair.size(); idx++) {
+        int d = ip - dbgPair[idx].first;
         if (d < 0) {
-            closest = &dbgPair[idx-1];
+            closest = &dbgPair[idx - 1];
             break;
         }
     }
     if (closest == nullptr) {
-        closest = &dbgPair[dbgPair.size()-1];
+        closest = &dbgPair[dbgPair.size() - 1];
     }
     std::string ret = closest->second;
-    ret += "+" + std::to_string(ip-closest->first) + "";
+    ret += "+" + std::to_string(ip - closest->first) + "";
     return ret;
 }
 
 void Interpreter::execute() {
-  if (debugMode)
-    std::cout << "[Debug][Interpreter] Starting execution...\n";
-  // Reset flags before execution? Or assume they persist? Assume reset for now.
-  zeroFlag = false;
-  signFlag = false;
-  // IP should be set by load() or jump instructions
-
-  // Ensure SP and BP reflect register values at start
-  sp = registers[7];
-  bp = registers[6];
-
-  while (ip < bytecode_raw.size()) {
-    int currentIp = ip;
     if (debugMode)
-      std::cout << "[Debug][Interpreter] IP: 0x" << std::hex << std::setw(4)
-                << std::setfill('0') << currentIp << std::dec << ": ";
+        std::cout << "[Debug][Interpreter] Starting execution...\n";
+    // Reset flags before execution? Or assume they persist? Assume reset for
+    // now.
+    zeroFlag = false;
+    signFlag = false;
+    // IP should be set by load() or jump instructions
 
-    Opcode opcode = static_cast<Opcode>(bytecode_raw[ip++]);
+    // Ensure SP and BP reflect register values at start
+    sp = registers[7];
+    bp = registers[6];
 
-    if (debugMode) {
-      std::cout << "Opcode 0x" << std::hex << std::setw(2) << std::setfill('0')
-                << static_cast<int>(opcode) << std::dec;
-      // You might want a helper function to convert Opcode enum to string here
-      std::cout << " (";
-      switch (opcode) { // Basic opcode names for debug
-      case MOV:
-        std::cout << "MOV";
-        break;
-      case ADD:
-        std::cout << "ADD";
-        break;
-      case SUB:
-        std::cout << "SUB";
-        break;
-      case MUL:
-        std::cout << "MUL";
-        break;
-      case DIV:
-        std::cout << "DIV";
-        break;
-      case INC:
-        std::cout << "INC";
-        break;
-      case JMP:
-        std::cout << "JMP";
-        break;
-      case CMP:
-        std::cout << "CMP";
-        break;
-      case JE:
-        std::cout << "JE";
-        break;
-      case JL:
-        std::cout << "JL";
-        break;
-      case CALL:
-        std::cout << "CALL";
-        break;
-      case RET:
-        std::cout << "RET";
-        break;
-      case PUSH:
-        std::cout << "PUSH";
-        break;
-      case POP:
-        std::cout << "POP";
-        break;
-      case OUT:
-        std::cout << "OUT";
-        break;
-      case COUT:
-        std::cout << "COUT";
-        break;
-      case OUTSTR:
-        std::cout << "OUTSTR";
-        break;
-      case OUTCHAR:
-        std::cout << "OUTCHAR";
-        break;
-      case HLT:
-        std::cout << "HLT";
-        break;
-      case ARGC:
-        std::cout << "ARGC";
-        break;
-      case GETARG:
-        std::cout << "GETARG";
-        break;
-      case DB:
-        std::cout << "DB";
-        break;
-      case LBL:
-        std::cout << "LBL";
-        break;
-      case AND:
-        std::cout << "AND";
-        break;
-      case OR:
-        std::cout << "OR";
-        break;
-      case XOR:
-        std::cout << "XOR";
-        break;
-      case NOT:
-        std::cout << "NOT";
-        break;
-      case SHL:
-        std::cout << "SHL";
-        break;
-      case SHR:
-        std::cout << "SHR";
-        break;
-      case MOVADDR:
-        std::cout << "MOVADDR";
-        break;
-      case MOVTO:
-        std::cout << "MOVTO";
-        break;
-      case JNE:
-        std::cout << "JNE";
-        break;
-      case JG:
-        std::cout << "JG";
-        break;
-      case JLE:
-        std::cout << "JLE";
-        break;
-      case JGE:
-        std::cout << "JGE";
-        break;
-      case ENTER:
-        std::cout << "ENTER";
-        break;
-      case LEAVE:
-        std::cout << "LEAVE";
-        break;
-      case COPY:
-        std::cout << "COPY";
-        break;
-      case FILL:
-        std::cout << "FILL";
-        break;
-      case CMP_MEM:
-        std::cout << "CMP_MEM";
-        break;
-      case MNI:
-        std::cout << "MNI";
-        break;
-      case IN:
-        std::cout << "IN";
-        break;
-      default:
-        std::cout << "???";
-        break;
-      }
-      std::cout << ")\n";
-    }
+    while (ip < bytecode_raw.size()) {
+        int currentIp = ip;
+        if (debugMode)
+            std::cout << "[Debug][Interpreter] IP: 0x" << std::hex
+                      << std::setw(4) << std::setfill('0') << currentIp
+                      << std::dec << ": ";
 
-    // Store pre-execution register state for comparison if needed
-    std::vector<int> regsBefore;
-    if (debugMode)
-      regsBefore = registers;
+        Opcode opcode = static_cast<Opcode>(bytecode_raw[ip++]);
 
-    try {
-      switch (opcode) {
-      // Basic Arithmetic
-      case MOV: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Src ): "
-                    << formatOperandDebug(op_src) << "\n";
-        int dest_reg =
-            getRegisterIndex(op_dest); // Destination must be register
-        registers[dest_reg] =
-            getValue(op_src); // Get value from source (reg or imm)
-        break;
-      }
-      case ADD: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Src ): "
-                    << formatOperandDebug(op_src) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        registers[dest_reg] += getValue(op_src); // Add value (reg or imm)
-        break;
-      }
-      case SUB: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Src ): "
-                    << formatOperandDebug(op_src) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        registers[dest_reg] -= getValue(op_src);
-        break;
-      }
-      case MUL: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Src ): "
-                    << formatOperandDebug(op_src) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        registers[dest_reg] *= getValue(op_src);
-        break;
-      }
-      case DIV: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Src ): "
-                    << formatOperandDebug(op_src) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        int src_val = getValue(op_src);
-        if (src_val == 0)
-          throw std::runtime_error("Division by zero");
-        registers[dest_reg] /= src_val;
-        break;
-      }
-      case INC: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        registers[dest_reg]++;
-        break;
-      }
-
-      // Flow Control
-      case JMP: {
-        BytecodeOperand op_target = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Target): "
-                    << formatOperandDebug(op_target) << "\n";
-        // Target should be immediate label address from compiler
-        if (op_target.type != OperandType::LABEL_ADDRESS &&
-            op_target.type != OperandType::IMMEDIATE) {
-          throw std::runtime_error(
-              "JMP requires immediate/label address operand");
-        }
-        ip = op_target.value; // Jump to absolute address
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]     Jumping to 0x" << std::hex
-                    << ip << std::dec << "\n";
-        break;
-      }
-      case CMP: {
-        BytecodeOperand op1 = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1: " << formatOperandDebug(op1)
-                    << "\n";
-        BytecodeOperand op2 = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2: " << formatOperandDebug(op2)
-                    << "\n";
-        int val1 = getValue(op1);
-        int val2 = getValue(op2);
-        zeroFlag = (val1 == val2);
-        signFlag = (val1 < val2);
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]     Compare(" << val1 << ", "
-                    << val2 << ") -> ZF=" << zeroFlag << ", SF=" << signFlag
-                    << "\n";
-        break;
-      }
-      // Conditional Jumps (JE, JNE, JL, JG, JLE, JGE)
-      case JE:
-      case JNE:
-      case JL:
-      case JG:
-      case JLE:
-      case JGE: {
-        BytecodeOperand op_target = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Target): "
-                    << formatOperandDebug(op_target) << "\n";
-        if (op_target.type != OperandType::LABEL_ADDRESS &&
-            op_target.type != OperandType::IMMEDIATE) {
-          throw std::runtime_error(
-              "Conditional jump requires immediate/label address operand");
-        }
-        bool shouldJump = false;
-        switch (opcode) {
-        case JE:
-          shouldJump = zeroFlag;
-          break;
-        case JNE:
-          shouldJump = !zeroFlag;
-          break;
-        case JL:
-          shouldJump = signFlag;
-          break;
-        case JG:
-          shouldJump = !zeroFlag && !signFlag;
-          break;
-        case JLE:
-          shouldJump = zeroFlag || signFlag;
-          break;
-        case JGE:
-          shouldJump = zeroFlag || !signFlag;
-          break;
-        default:
-          break; // Should not happen
-        }
-        if (shouldJump) {
-          ip = op_target.value;
-          if (debugMode)
-            std::cout << "[Debug][Interpreter]     Condition met. Jumping to 0x"
-                      << std::hex << ip << std::dec << "\n";
-        } else {
-          if (debugMode)
-            std::cout
-                << "[Debug][Interpreter]     Condition not met. Continuing.\n";
-        }
-        break;
-      }
-
-      case CALL: {
-        BytecodeOperand op_target = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Target): "
-                    << formatOperandDebug(op_target) << "\n";
-        if (op_target.type != OperandType::LABEL_ADDRESS &&
-            op_target.type != OperandType::IMMEDIATE) {
-          throw std::runtime_error(
-              "CALL requires immediate/label address operand");
-        }
-        pushStack(ip); // Push return address (address AFTER call instruction +
-                       // operands)
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]     Pushing return address 0x"
-                    << std::hex << ip << std::dec << ". Calling 0x" << std::hex
-                    << op_target.value << std::dec << "\n";
-        ip = op_target.value; // Jump to function
-        break;
-      }
-      case RET: {
-        if (registers[7] >= ram.size())
-          throw std::runtime_error("Stack underflow on RET");
-        int retAddr = popStack();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]     Popped return address 0x"
-                    << std::hex << retAddr << std::dec << ". Returning.\n";
-        ip = retAddr; // Pop return address and jump
-        break;
-      }
-
-      // Stack Operations
-      case PUSH: {
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Src): "
-                    << formatOperandDebug(op_src) << "\n";
-        int val = getValue(op_src);
-        pushStack(val); // Push value (reg or imm)
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]     Pushed value " << val
-                    << ". New SP: 0x" << std::hex << sp << std::dec << "\n";
-        break;
-      }
-      case POP: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        int val = popStack();
-        registers[dest_reg] = val;
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]     Popped value " << val
-                    << " into R" << dest_reg << ". New SP: 0x" << std::hex << sp
-                    << std::dec << "\n";
-        break;
-      }
-
-      // I/O Operations
-      case OUT: {
-        BytecodeOperand op_port = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Port): "
-                    << formatOperandDebug(op_port) << "\n";
-        BytecodeOperand op_val = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Val ): "
-                    << formatOperandDebug(op_val) << "\n";
-        int port = getValue(op_port);
-        std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
-        if (port != 1 && port != 2)
-          throw std::runtime_error("Invalid port for OUT: " +
-                                   std::to_string(port));
-        switch (op_val.type) {
-        case OperandType::DATA_ADDRESS: {
-          // Get the absolute RAM address (Base + Offset)
-          int address = op_val.value;
-          if (address < 0 || address >= ram.size()) {
-            throw std::runtime_error("OUT: Data address out of RAM bounds: " +
-                                     std::to_string(op_val.value));
-          }
-          out_stream << readRamString(
-              address); // Read and print the string from RAM
-          break;
-        }
-        case OperandType::REGISTER_AS_ADDRESS: {
-          int reg_index = op_val.value;
-          if (reg_index < 0 || reg_index >= registers.size()) {
-            throw std::runtime_error(
-                "OUT: Invalid register index for REGISTER_AS_ADDRESS: " +
-                std::to_string(reg_index));
-          }
-          int address = registers[reg_index]; // Get address from register
-          if (address < 0 || address >= ram.size()) {
-            throw std::runtime_error(
-                "OUT: Address in register R" + std::to_string(reg_index) +
-                " (" + std::to_string(address) + ") is out of RAM bounds");
-          }
-          out_stream << readRamString(
-              address); // Read and print the string from RAM
-          break;
-        }
-        case OperandType::REGISTER: {
-          int reg_val = registers[getRegisterIndex(op_val)];
-          out_stream << reg_val; // Print the integer value in the register
-          break;
-        }
-        case OperandType::IMMEDIATE: {
-          out_stream << op_val.value; // Print the immediate integer value
-          break;
-        }
-        default:
-          throw std::runtime_error(
-              "Unsupported operand type for OUT value: " +
-              std::to_string(static_cast<int>(op_val.type)));
-        }
-        break;
-      }
-      case COUT: {
-        BytecodeOperand op_port = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Port): "
-                    << formatOperandDebug(op_port) << "\n";
-        BytecodeOperand op_val = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Val ): "
-                    << formatOperandDebug(op_val) << "\n";
-        int port = getValue(op_port);
-        std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
-        if (port != 1 && port != 2)
-          throw std::runtime_error("Invalid port for COUT: " +
-                                   std::to_string(port));
-        out_stream << static_cast<char>(getValue(op_val)); // Output char value
-        break;
-      }
-      case OUTSTR: { // Prints string from RAM address IN REGISTER
-        BytecodeOperand op_port = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Port): "
-                    << formatOperandDebug(op_port) << "\n";
-        BytecodeOperand op_addr = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Addr): "
-                    << formatOperandDebug(op_addr) << "\n";
-        BytecodeOperand op_len = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op3(Len ): "
-                    << formatOperandDebug(op_len) << "\n";
-        int port = getValue(op_port);
-        std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
-        if (port != 1 && port != 2)
-          throw std::runtime_error("Invalid port for OUTSTR: " +
-                                   std::to_string(port));
-
-        int addr = getValue(op_addr);
-        int len = getValue(op_len);
-        for (int i = 0; i < len; ++i) {
-          out_stream << readRamChar(addr + i); // Read char by char
-        }
-        // No automatic newline for OUTSTR
-        break;
-      }
-      case OUTCHAR: { // Prints single char from RAM address IN REGISTER
-        BytecodeOperand op_port = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Port): "
-                    << formatOperandDebug(op_port) << "\n";
-        BytecodeOperand op_addr = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Addr): "
-                    << formatOperandDebug(op_addr) << "\n";
-        int port = getValue(op_port);
-        std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
-        if (port != 1 && port != 2)
-          throw std::runtime_error("Invalid port for OUTCHAR: " +
-                                   std::to_string(port));
-
-        int addr = getValue(op_addr);
-        out_stream << readRamChar(addr); // Read single char
-        // No automatic newline for OUTCHAR
-        break;
-      }
-      case IN: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        // Destination can be REGISTER_AS_ADDRESS or DATA_ADDRESS
-        int destAddr;
-        if (op_dest.type == OperandType::REGISTER_AS_ADDRESS) {
-          int reg_index = op_dest.value;
-          if (reg_index < 0 || reg_index >= registers.size()) {
-            throw std::runtime_error(
-                "IN: Invalid register index for REGISTER_AS_ADDRESS: " +
-                std::to_string(reg_index));
-          }
-          destAddr = registers[reg_index];
-        } else if (op_dest.type == OperandType::DATA_ADDRESS) {
-          destAddr = op_dest.value;
-        } else {
-          throw std::runtime_error(
-              "IN requires a destination operand of type REGISTER_AS_ADDRESS "
-              "($R<n>) or DATA_ADDRESS ($<label>)");
-        }
-
-        if (destAddr < 0 ||
-            destAddr >= ram.size()) { // Basic check, might need more space
-          throw std::runtime_error("IN: Destination address " +
-                                   std::to_string(destAddr) +
-                                   " is out of RAM bounds");
-        }
-
-        std::string input;
-        std::getline(std::cin, input);
-
-        // Check if there's enough space in RAM
-        if (destAddr + input.size() + 1 >
-            ram.size()) { // +1 for null terminator
-          throw std::runtime_error("IN: Not enough RAM space at address " +
-                                   std::to_string(destAddr) +
-                                   " for input string of size " +
-                                   std::to_string(input.size()));
-        }
-
-        // Write input and null terminator to memory
-        std::copy(input.begin(), input.end(), ram.begin() + destAddr);
-        ram[destAddr + input.size()] = '\0';
-        break;
-      }
-
-      // Program Control
-      case HLT: {
-        if (debugMode)
-          std::cout << "[Debug][Interpreter] HLT encountered.\n";
-        return;
-      } // Halt execution
-      case ARGC: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        registers[getRegisterIndex(op_dest)] =
-            cmdArgs.size(); // Use cmdArgs member
-        break;
-      }
-      case GETARG: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_index = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Index): "
-                    << formatOperandDebug(op_index) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        int index = getValue(op_index);
-        if (index < 0 || index >= cmdArgs.size()) {
-          throw std::runtime_error("GETARG index out of bounds: " +
-                                   std::to_string(index));
-        }
-        // How to store string arg in int register? Store address.
-        // Need to copy string to RAM and store address.
-        // Simplified: Not implemented fully. Requires memory management.
-        registers[dest_reg] = 0; // Placeholder
-        std::cerr << "Warning: GETARG not fully implemented (string handling)."
-                  << std::endl;
-        break;
-      }
-
-      // Bitwise Operations
-      case AND: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Src ): "
-                    << formatOperandDebug(op_src) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        registers[dest_reg] &= getValue(op_src);
-        break;
-      }
-      case OR: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Src ): "
-                    << formatOperandDebug(op_src) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        registers[dest_reg] |= getValue(op_src);
-        break;
-      }
-      case XOR: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Src ): "
-                    << formatOperandDebug(op_src) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        registers[dest_reg] ^= getValue(op_src);
-        break;
-      }
-      case NOT: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        registers[dest_reg] = ~registers[dest_reg];
-        break;
-      }
-      case SHL: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_count = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Count): "
-                    << formatOperandDebug(op_count) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        registers[dest_reg] <<= getValue(op_count);
-        break;
-      }
-      case SHR: {
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_count = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Count): "
-                    << formatOperandDebug(op_count) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        registers[dest_reg] >>= getValue(op_count);
-        break;
-      } // Arithmetic right shift
-
-      // Memory Addressing
-      case MOVADDR: { // MOVADDR dest_reg src_addr_reg offset_reg
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_src_addr = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(SrcAddr): "
-                    << formatOperandDebug(op_src_addr) << "\n";
-        BytecodeOperand op_offset = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op3(Offset): "
-                    << formatOperandDebug(op_offset) << "\n";
-        int dest_reg = getRegisterIndex(op_dest);
-        int address = getValue(op_src_addr) + getValue(op_offset);
-        registers[dest_reg] = readRamInt(address);
-        break;
-      }
-      case MOVTO: { // MOVTO dest_addr_reg offset_reg src_reg
-        BytecodeOperand op_dest_addr = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(DestAddr): "
-                    << formatOperandDebug(op_dest_addr) << "\n";
-        BytecodeOperand op_offset = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Offset): "
-                    << formatOperandDebug(op_offset) << "\n";
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op3(Src): "
-                    << formatOperandDebug(op_src) << "\n";
-        int address = getValue(op_dest_addr) + getValue(op_offset);
-        writeRamInt(address, getValue(op_src));
-        break;
-      }
-
-      // Stack Frame Management
-      case ENTER: { // ENTER framesize (immediate)
-        BytecodeOperand op_frameSize = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(FrameSize): "
-                    << formatOperandDebug(op_frameSize) << "\n";
-        int frameSize = getValue(op_frameSize);
-        pushStack(registers[6]);     // Push RBP
-        registers[6] = registers[7]; // MOV RBP, RSP
-        bp = registers[6];
-        registers[7] -= frameSize; // SUB RSP, framesize // (PUSH 0) * framesize
-        sp = registers[7];
-        break;
-      }
-      case LEAVE: {                  // LEAVE
-        registers[7] = registers[6]; // MOV RSP, RBP
-        sp = registers[7];
-        registers[6] = popStack(); // POP RBP
-        bp = registers[6];
-        break;
-      }
-
-      // String/Memory Operations
-      case COPY: { // COPY dest_addr_reg src_addr_reg len_reg
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_src = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Src ): "
-                    << formatOperandDebug(op_src) << "\n";
-        BytecodeOperand op_len = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op3(Len ): "
-                    << formatOperandDebug(op_len) << "\n";
-        int dest_addr = getValue(op_dest);
-        int src_addr = getValue(op_src);
-        int len = getValue(op_len);
-        if (len < 0)
-          throw std::runtime_error("COPY length cannot be negative");
-        if (dest_addr < 0 || dest_addr + len > ram.size() || src_addr < 0 ||
-            src_addr + len > ram.size()) {
-          throw std::runtime_error("COPY memory access out of bounds");
-        }
-        // Use memcpy directly (it's in the global namespace via <cstring>)
-        memcpy(&ram[dest_addr], &ram[src_addr], len);
-        break;
-      }
-      case FILL: { // FILL dest_addr_reg value_reg len_reg
-        BytecodeOperand op_dest = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Dest): "
-                    << formatOperandDebug(op_dest) << "\n";
-        BytecodeOperand op_val = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Val ): "
-                    << formatOperandDebug(op_val) << "\n";
-        BytecodeOperand op_len = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op3(Len ): "
-                    << formatOperandDebug(op_len) << "\n";
-        int dest_addr = getValue(op_dest);
-        int value = getValue(op_val) & 0xFF; // Use lower byte of value register
-        int len = getValue(op_len);
-        if (len < 0)
-          throw std::runtime_error("FILL length cannot be negative");
-        if (dest_addr < 0 || dest_addr + len > ram.size()) {
-          throw std::runtime_error("FILL memory access out of bounds");
-        }
-        // Use memset directly
-        memset(&ram[dest_addr], value, len);
-        break;
-      }
-      case CMP_MEM: { // CMP_MEM addr1_reg addr2_reg len_reg
-        BytecodeOperand op_addr1 = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op1(Addr1): "
-                    << formatOperandDebug(op_addr1) << "\n";
-        BytecodeOperand op_addr2 = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op2(Addr2): "
-                    << formatOperandDebug(op_addr2) << "\n";
-        BytecodeOperand op_len = nextRawOperand();
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   Op3(Len ): "
-                    << formatOperandDebug(op_len) << "\n";
-        int addr1 = getValue(op_addr1);
-        int addr2 = getValue(op_addr2);
-        int len = getValue(op_len);
-        if (len < 0)
-          throw std::runtime_error("CMP_MEM length cannot be negative");
-        if (addr1 < 0 || addr1 + len > ram.size() || addr2 < 0 ||
-            addr2 + len > ram.size()) {
-          throw std::runtime_error("CMP_MEM memory access out of bounds");
-        }
-        // Use memcmp directly
-        int result = memcmp(&ram[addr1], &ram[addr2], len);
-        zeroFlag = (result == 0);
-        signFlag = (result < 0);
-        break;
-      }
-
-      case MNI: {
-        std::string functionName =
-            readBytecodeString(); // Read Module.Function\0
-        if (debugMode)
-          std::cout << "[Debug][Interpreter]   MNI Func: " << functionName
-                    << "\n";
-        std::vector<BytecodeOperand> mniArgs;
-        while (true) {
-          BytecodeOperand arg = nextRawOperand();
-          if (arg.type == OperandType::NONE) {
-            if (debugMode)
-              std::cout << "[Debug][Interpreter]     End MNI Args\n";
-            break; // End of arguments marker
-          }
-          if (debugMode)
-            std::cout << "[Debug][Interpreter]     MNI Arg : "
-                      << formatOperandDebug(arg) << "\n";
-          mniArgs.push_back(arg);
-        }
-        if (mniRegistry.count(functionName)) {
-          mniRegistry[functionName](*this,
-                                    mniArgs); // Call the registered function
-        } else {
-          throw std::runtime_error("Unregistered MNI function called: " +
-                                   functionName);
-        }
-        break;
-      }
-
-      default:
-        throw std::runtime_error(
-            "Unimplemented or unknown opcode encountered during execution: 0x" +
-            std::to_string(opcode));
-      }
-
-      // Optional: Print changed registers
-      if (debugMode) {
-        for (size_t i = 0; i < registers.size(); ++i) {
-          if (registers[i] != regsBefore[i]) {
-            std::cout << "[Debug][Interpreter]     Reg Change: R" << i << " = "
-                      << registers[i] << " (was " << regsBefore[i] << ")\n";
-          }
-        }
-        // Print flag changes if CMP or relevant instruction executed
-        // (Requires tracking if flags were potentially modified by the opcode)
-      }
-
-    } catch (const std::exception &e) {
-        // Print MNI stack trace if any
-
-        if (!mniCallStack.empty()) {
-            std::cerr << "MNI Call Stack (most recent call last):\n";
-            for (auto it = mniCallStack.rbegin(); it != mniCallStack.rend(); ++it) {
-                std::cerr << "  at " << *it << std::endl;
+        if (debugMode) {
+            std::cout << "Opcode 0x" << std::hex << std::setw(2)
+                      << std::setfill('0') << static_cast<int>(opcode)
+                      << std::dec;
+            // You might want a helper function to convert Opcode enum to string
+            // here
+            std::cout << " (";
+            switch (opcode) { // Basic opcode names for debug
+            case MOV:
+                std::cout << "MOV";
+                break;
+            case ADD:
+                std::cout << "ADD";
+                break;
+            case SUB:
+                std::cout << "SUB";
+                break;
+            case MUL:
+                std::cout << "MUL";
+                break;
+            case DIV:
+                std::cout << "DIV";
+                break;
+            case INC:
+                std::cout << "INC";
+                break;
+            case JMP:
+                std::cout << "JMP";
+                break;
+            case CMP:
+                std::cout << "CMP";
+                break;
+            case JE:
+                std::cout << "JE";
+                break;
+            case JL:
+                std::cout << "JL";
+                break;
+            case CALL:
+                std::cout << "CALL";
+                break;
+            case RET:
+                std::cout << "RET";
+                break;
+            case PUSH:
+                std::cout << "PUSH";
+                break;
+            case POP:
+                std::cout << "POP";
+                break;
+            case OUT:
+                std::cout << "OUT";
+                break;
+            case COUT:
+                std::cout << "COUT";
+                break;
+            case OUTSTR:
+                std::cout << "OUTSTR";
+                break;
+            case OUTCHAR:
+                std::cout << "OUTCHAR";
+                break;
+            case HLT:
+                std::cout << "HLT";
+                break;
+            case ARGC:
+                std::cout << "ARGC";
+                break;
+            case GETARG:
+                std::cout << "GETARG";
+                break;
+            case DB:
+                std::cout << "DB";
+                break;
+            case LBL:
+                std::cout << "LBL";
+                break;
+            case AND:
+                std::cout << "AND";
+                break;
+            case OR:
+                std::cout << "OR";
+                break;
+            case XOR:
+                std::cout << "XOR";
+                break;
+            case NOT:
+                std::cout << "NOT";
+                break;
+            case SHL:
+                std::cout << "SHL";
+                break;
+            case SHR:
+                std::cout << "SHR";
+                break;
+            case MOVADDR:
+                std::cout << "MOVADDR";
+                break;
+            case MOVTO:
+                std::cout << "MOVTO";
+                break;
+            case JNE:
+                std::cout << "JNE";
+                break;
+            case JG:
+                std::cout << "JG";
+                break;
+            case JLE:
+                std::cout << "JLE";
+                break;
+            case JGE:
+                std::cout << "JGE";
+                break;
+            case ENTER:
+                std::cout << "ENTER";
+                break;
+            case LEAVE:
+                std::cout << "LEAVE";
+                break;
+            case COPY:
+                std::cout << "COPY";
+                break;
+            case FILL:
+                std::cout << "FILL";
+                break;
+            case CMP_MEM:
+                std::cout << "CMP_MEM";
+                break;
+            case MNI:
+                std::cout << "MNI";
+                break;
+            case IN:
+                std::cout << "IN";
+                break;
+            default:
+                std::cout << "???";
+                break;
             }
+            std::cout << ")\n";
         }
-        std::cerr << "\nRuntime Error at bytecode offset 0x" << std::hex << currentIp << std::dec << " (Opcode: 0x" << std::hex << static_cast<int>(opcode) << std::dec << "): " << e.what() << std::endl;
-        // Stack trace if -t or --trace
-        if (stackTrace) {
-            std::cerr << "\nStack Trace (most recent call first):\n";
-            struct stack_frame frame;
-            frame.rbp = registers[6]; // ebp
-            frame.ip = ip;
 
-            while (frame.rbp != 0) {
-                std::cerr << getAddr(frame.ip, lbls) << std::endl;
-                frame.ip = readRamInt(frame.rbp+4);
-                frame.rbp = readRamInt(frame.rbp);
+        // Store pre-execution register state for comparison if needed
+        std::vector<int> regsBefore;
+        if (debugMode)
+            regsBefore = registers;
+
+        try {
+            switch (opcode) {
+            // Basic Arithmetic
+            case MOV: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Src ): "
+                              << formatOperandDebug(op_src) << "\n";
+                int dest_reg =
+                    getRegisterIndex(op_dest); // Destination must be register
+                registers[dest_reg] =
+                    getValue(op_src); // Get value from source (reg or imm)
+                break;
             }
+            case ADD: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Src ): "
+                              << formatOperandDebug(op_src) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                registers[dest_reg] +=
+                    getValue(op_src); // Add value (reg or imm)
+                break;
+            }
+            case SUB: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Src ): "
+                              << formatOperandDebug(op_src) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                registers[dest_reg] -= getValue(op_src);
+                break;
+            }
+            case MUL: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Src ): "
+                              << formatOperandDebug(op_src) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                registers[dest_reg] *= getValue(op_src);
+                break;
+            }
+            case DIV: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Src ): "
+                              << formatOperandDebug(op_src) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                int src_val = getValue(op_src);
+                if (src_val == 0)
+                    throw std::runtime_error("Division by zero");
+                registers[dest_reg] /= src_val;
+                break;
+            }
+            case INC: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                registers[dest_reg]++;
+                break;
+            }
+
+            // Flow Control
+            case JMP: {
+                BytecodeOperand op_target = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Target): "
+                              << formatOperandDebug(op_target) << "\n";
+                // Target should be immediate label address from compiler
+                if (op_target.type != OperandType::LABEL_ADDRESS &&
+                    op_target.type != OperandType::IMMEDIATE) {
+                    throw std::runtime_error(
+                        "JMP requires immediate/label address operand");
+                }
+                ip = op_target.value; // Jump to absolute address
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]     Jumping to 0x"
+                              << std::hex << ip << std::dec << "\n";
+                break;
+            }
+            case CMP: {
+                BytecodeOperand op1 = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1: "
+                              << formatOperandDebug(op1) << "\n";
+                BytecodeOperand op2 = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2: "
+                              << formatOperandDebug(op2) << "\n";
+                int val1 = getValue(op1);
+                int val2 = getValue(op2);
+                zeroFlag = (val1 == val2);
+                signFlag = (val1 < val2);
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]     Compare(" << val1
+                              << ", " << val2 << ") -> ZF=" << zeroFlag
+                              << ", SF=" << signFlag << "\n";
+                break;
+            }
+            // Conditional Jumps (JE, JNE, JL, JG, JLE, JGE)
+            case JE:
+            case JNE:
+            case JL:
+            case JG:
+            case JLE:
+            case JGE: {
+                BytecodeOperand op_target = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Target): "
+                              << formatOperandDebug(op_target) << "\n";
+                if (op_target.type != OperandType::LABEL_ADDRESS &&
+                    op_target.type != OperandType::IMMEDIATE) {
+                    throw std::runtime_error("Conditional jump requires "
+                                             "immediate/label address operand");
+                }
+                bool shouldJump = false;
+                switch (opcode) {
+                case JE:
+                    shouldJump = zeroFlag;
+                    break;
+                case JNE:
+                    shouldJump = !zeroFlag;
+                    break;
+                case JL:
+                    shouldJump = signFlag;
+                    break;
+                case JG:
+                    shouldJump = !zeroFlag && !signFlag;
+                    break;
+                case JLE:
+                    shouldJump = zeroFlag || signFlag;
+                    break;
+                case JGE:
+                    shouldJump = zeroFlag || !signFlag;
+                    break;
+                default:
+                    break; // Should not happen
+                }
+                if (shouldJump) {
+                    ip = op_target.value;
+                    if (debugMode)
+                        std::cout << "[Debug][Interpreter]     Condition met. "
+                                     "Jumping to 0x"
+                                  << std::hex << ip << std::dec << "\n";
+                } else {
+                    if (debugMode)
+                        std::cout << "[Debug][Interpreter]     Condition not "
+                                     "met. Continuing.\n";
+                }
+                break;
+            }
+
+            case CALL: {
+                BytecodeOperand op_target = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Target): "
+                              << formatOperandDebug(op_target) << "\n";
+                if (op_target.type != OperandType::LABEL_ADDRESS &&
+                    op_target.type != OperandType::IMMEDIATE) {
+                    throw std::runtime_error(
+                        "CALL requires immediate/label address operand");
+                }
+                pushStack(ip); // Push return address (address AFTER call
+                               // instruction + operands)
+                if (debugMode)
+                    std::cout
+                        << "[Debug][Interpreter]     Pushing return address 0x"
+                        << std::hex << ip << std::dec << ". Calling 0x"
+                        << std::hex << op_target.value << std::dec << "\n";
+                ip = op_target.value; // Jump to function
+                break;
+            }
+            case RET: {
+                if (registers[7] >= ram.size())
+                    throw std::runtime_error("Stack underflow on RET");
+                int retAddr = popStack();
+                if (debugMode)
+                    std::cout
+                        << "[Debug][Interpreter]     Popped return address 0x"
+                        << std::hex << retAddr << std::dec << ". Returning.\n";
+                ip = retAddr; // Pop return address and jump
+                break;
+            }
+
+            // Stack Operations
+            case PUSH: {
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Src): "
+                              << formatOperandDebug(op_src) << "\n";
+                int val = getValue(op_src);
+                pushStack(val); // Push value (reg or imm)
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]     Pushed value " << val
+                              << ". New SP: 0x" << std::hex << sp << std::dec
+                              << "\n";
+                break;
+            }
+            case POP: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                int val = popStack();
+                registers[dest_reg] = val;
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]     Popped value " << val
+                              << " into R" << dest_reg << ". New SP: 0x"
+                              << std::hex << sp << std::dec << "\n";
+                break;
+            }
+
+            // I/O Operations
+            case OUT: {
+                BytecodeOperand op_port = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Port): "
+                              << formatOperandDebug(op_port) << "\n";
+                BytecodeOperand op_val = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Val ): "
+                              << formatOperandDebug(op_val) << "\n";
+                int port = getValue(op_port);
+                std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
+                if (port != 1 && port != 2)
+                    throw std::runtime_error("Invalid port for OUT: " +
+                                             std::to_string(port));
+                switch (op_val.type) {
+                case OperandType::DATA_ADDRESS: {
+                    // Get the absolute RAM address (Base + Offset)
+                    int address = op_val.value;
+                    if (address < 0 || address >= ram.size()) {
+                        throw std::runtime_error(
+                            "OUT: Data address out of RAM bounds: " +
+                            std::to_string(op_val.value));
+                    }
+                    out_stream << readRamString(
+                        address); // Read and print the string from RAM
+                    break;
+                }
+                case OperandType::REGISTER_AS_ADDRESS: {
+                    int reg_index = op_val.value;
+                    if (reg_index < 0 || reg_index >= registers.size()) {
+                        throw std::runtime_error("OUT: Invalid register index "
+                                                 "for REGISTER_AS_ADDRESS: " +
+                                                 std::to_string(reg_index));
+                    }
+                    int address =
+                        registers[reg_index]; // Get address from register
+                    if (address < 0 || address >= ram.size()) {
+                        throw std::runtime_error(
+                            "OUT: Address in register R" +
+                            std::to_string(reg_index) + " (" +
+                            std::to_string(address) + ") is out of RAM bounds");
+                    }
+                    out_stream << readRamString(
+                        address); // Read and print the string from RAM
+                    break;
+                }
+                case OperandType::REGISTER: {
+                    int reg_val = registers[getRegisterIndex(op_val)];
+                    out_stream
+                        << reg_val; // Print the integer value in the register
+                    break;
+                }
+                case OperandType::IMMEDIATE: {
+                    out_stream
+                        << op_val.value; // Print the immediate integer value
+                    break;
+                }
+                default:
+                    throw std::runtime_error(
+                        "Unsupported operand type for OUT value: " +
+                        std::to_string(static_cast<int>(op_val.type)));
+                }
+                break;
+            }
+            case COUT: {
+                BytecodeOperand op_port = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Port): "
+                              << formatOperandDebug(op_port) << "\n";
+                BytecodeOperand op_val = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Val ): "
+                              << formatOperandDebug(op_val) << "\n";
+                int port = getValue(op_port);
+                std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
+                if (port != 1 && port != 2)
+                    throw std::runtime_error("Invalid port for COUT: " +
+                                             std::to_string(port));
+                out_stream << static_cast<char>(
+                    getValue(op_val)); // Output char value
+                break;
+            }
+            case OUTSTR: { // Prints string from RAM address IN REGISTER
+                BytecodeOperand op_port = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Port): "
+                              << formatOperandDebug(op_port) << "\n";
+                BytecodeOperand op_addr = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Addr): "
+                              << formatOperandDebug(op_addr) << "\n";
+                BytecodeOperand op_len = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op3(Len ): "
+                              << formatOperandDebug(op_len) << "\n";
+                int port = getValue(op_port);
+                std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
+                if (port != 1 && port != 2)
+                    throw std::runtime_error("Invalid port for OUTSTR: " +
+                                             std::to_string(port));
+
+                int addr = getValue(op_addr);
+                int len = getValue(op_len);
+                for (int i = 0; i < len; ++i) {
+                    out_stream << readRamChar(addr + i); // Read char by char
+                }
+                // No automatic newline for OUTSTR
+                break;
+            }
+            case OUTCHAR: { // Prints single char from RAM address IN REGISTER
+                BytecodeOperand op_port = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Port): "
+                              << formatOperandDebug(op_port) << "\n";
+                BytecodeOperand op_addr = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Addr): "
+                              << formatOperandDebug(op_addr) << "\n";
+                int port = getValue(op_port);
+                std::ostream &out_stream = (port == 2) ? std::cerr : std::cout;
+                if (port != 1 && port != 2)
+                    throw std::runtime_error("Invalid port for OUTCHAR: " +
+                                             std::to_string(port));
+
+                int addr = getValue(op_addr);
+                out_stream << readRamChar(addr); // Read single char
+                // No automatic newline for OUTCHAR
+                break;
+            }
+            case IN: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                // Destination can be REGISTER_AS_ADDRESS or DATA_ADDRESS
+                int destAddr;
+                if (op_dest.type == OperandType::REGISTER_AS_ADDRESS) {
+                    int reg_index = op_dest.value;
+                    if (reg_index < 0 || reg_index >= registers.size()) {
+                        throw std::runtime_error("IN: Invalid register index "
+                                                 "for REGISTER_AS_ADDRESS: " +
+                                                 std::to_string(reg_index));
+                    }
+                    destAddr = registers[reg_index];
+                } else if (op_dest.type == OperandType::DATA_ADDRESS) {
+                    destAddr = op_dest.value;
+                } else {
+                    throw std::runtime_error(
+                        "IN requires a destination operand of type "
+                        "REGISTER_AS_ADDRESS "
+                        "($R<n>) or DATA_ADDRESS ($<label>)");
+                }
+
+                if (destAddr < 0 ||
+                    destAddr >=
+                        ram.size()) { // Basic check, might need more space
+                    throw std::runtime_error("IN: Destination address " +
+                                             std::to_string(destAddr) +
+                                             " is out of RAM bounds");
+                }
+
+                std::string input;
+                std::getline(std::cin, input);
+
+                // Check if there's enough space in RAM
+                if (destAddr + input.size() + 1 >
+                    ram.size()) { // +1 for null terminator
+                    throw std::runtime_error(
+                        "IN: Not enough RAM space at address " +
+                        std::to_string(destAddr) +
+                        " for input string of size " +
+                        std::to_string(input.size()));
+                }
+
+                // Write input and null terminator to memory
+                std::copy(input.begin(), input.end(), ram.begin() + destAddr);
+                ram[destAddr + input.size()] = '\0';
+                break;
+            }
+
+            // Program Control
+            case HLT: {
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter] HLT encountered.\n";
+                return;
+            } // Halt execution
+            case ARGC: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                registers[getRegisterIndex(op_dest)] =
+                    cmdArgs.size(); // Use cmdArgs member
+                break;
+            }
+            case GETARG: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_index = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Index): "
+                              << formatOperandDebug(op_index) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                int index = getValue(op_index);
+                if (index < 0 || index >= cmdArgs.size()) {
+                    throw std::runtime_error("GETARG index out of bounds: " +
+                                             std::to_string(index));
+                }
+                // How to store string arg in int register? Store address.
+                // Need to copy string to RAM and store address.
+                // Simplified: Not implemented fully. Requires memory
+                // management.
+                registers[dest_reg] = 0; // Placeholder
+                std::cerr << "Warning: GETARG not fully implemented (string "
+                             "handling)."
+                          << std::endl;
+                break;
+            }
+
+            // Bitwise Operations
+            case AND: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Src ): "
+                              << formatOperandDebug(op_src) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                registers[dest_reg] &= getValue(op_src);
+                break;
+            }
+            case OR: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Src ): "
+                              << formatOperandDebug(op_src) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                registers[dest_reg] |= getValue(op_src);
+                break;
+            }
+            case XOR: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Src ): "
+                              << formatOperandDebug(op_src) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                registers[dest_reg] ^= getValue(op_src);
+                break;
+            }
+            case NOT: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                registers[dest_reg] = ~registers[dest_reg];
+                break;
+            }
+            case SHL: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_count = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Count): "
+                              << formatOperandDebug(op_count) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                registers[dest_reg] <<= getValue(op_count);
+                break;
+            }
+            case SHR: {
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_count = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Count): "
+                              << formatOperandDebug(op_count) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                registers[dest_reg] >>= getValue(op_count);
+                break;
+            } // Arithmetic right shift
+
+            // Memory Addressing
+            case MOVADDR: { // MOVADDR dest_reg src_addr_reg offset_reg
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_src_addr = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(SrcAddr): "
+                              << formatOperandDebug(op_src_addr) << "\n";
+                BytecodeOperand op_offset = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op3(Offset): "
+                              << formatOperandDebug(op_offset) << "\n";
+                int dest_reg = getRegisterIndex(op_dest);
+                int address = getValue(op_src_addr) + getValue(op_offset);
+                registers[dest_reg] = readRamInt(address);
+                break;
+            }
+            case MOVTO: { // MOVTO dest_addr_reg offset_reg src_reg
+                BytecodeOperand op_dest_addr = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(DestAddr): "
+                              << formatOperandDebug(op_dest_addr) << "\n";
+                BytecodeOperand op_offset = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Offset): "
+                              << formatOperandDebug(op_offset) << "\n";
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op3(Src): "
+                              << formatOperandDebug(op_src) << "\n";
+                int address = getValue(op_dest_addr) + getValue(op_offset);
+                writeRamInt(address, getValue(op_src));
+                break;
+            }
+
+            // Stack Frame Management
+            case ENTER: { // ENTER framesize (immediate)
+                BytecodeOperand op_frameSize = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(FrameSize): "
+                              << formatOperandDebug(op_frameSize) << "\n";
+                int frameSize = getValue(op_frameSize);
+                pushStack(registers[6]);     // Push RBP
+                registers[6] = registers[7]; // MOV RBP, RSP
+                bp = registers[6];
+                registers[7] -=
+                    frameSize; // SUB RSP, framesize // (PUSH 0) * framesize
+                sp = registers[7];
+                break;
+            }
+            case LEAVE: {                    // LEAVE
+                registers[7] = registers[6]; // MOV RSP, RBP
+                sp = registers[7];
+                registers[6] = popStack(); // POP RBP
+                bp = registers[6];
+                break;
+            }
+
+            // String/Memory Operations
+            case COPY: { // COPY dest_addr_reg src_addr_reg len_reg
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_src = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Src ): "
+                              << formatOperandDebug(op_src) << "\n";
+                BytecodeOperand op_len = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op3(Len ): "
+                              << formatOperandDebug(op_len) << "\n";
+                int dest_addr = getValue(op_dest);
+                int src_addr = getValue(op_src);
+                int len = getValue(op_len);
+                if (len < 0)
+                    throw std::runtime_error("COPY length cannot be negative");
+                if (dest_addr < 0 || dest_addr + len > ram.size() ||
+                    src_addr < 0 || src_addr + len > ram.size()) {
+                    throw std::runtime_error(
+                        "COPY memory access out of bounds");
+                }
+                // Use memcpy directly (it's in the global namespace via
+                // <cstring>)
+                memcpy(&ram[dest_addr], &ram[src_addr], len);
+                break;
+            }
+            case FILL: { // FILL dest_addr_reg value_reg len_reg
+                BytecodeOperand op_dest = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Dest): "
+                              << formatOperandDebug(op_dest) << "\n";
+                BytecodeOperand op_val = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Val ): "
+                              << formatOperandDebug(op_val) << "\n";
+                BytecodeOperand op_len = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op3(Len ): "
+                              << formatOperandDebug(op_len) << "\n";
+                int dest_addr = getValue(op_dest);
+                int value =
+                    getValue(op_val) & 0xFF; // Use lower byte of value register
+                int len = getValue(op_len);
+                if (len < 0)
+                    throw std::runtime_error("FILL length cannot be negative");
+                if (dest_addr < 0 || dest_addr + len > ram.size()) {
+                    throw std::runtime_error(
+                        "FILL memory access out of bounds");
+                }
+                // Use memset directly
+                memset(&ram[dest_addr], value, len);
+                break;
+            }
+            case CMP_MEM: { // CMP_MEM addr1_reg addr2_reg len_reg
+                BytecodeOperand op_addr1 = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(Addr1): "
+                              << formatOperandDebug(op_addr1) << "\n";
+                BytecodeOperand op_addr2 = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(Addr2): "
+                              << formatOperandDebug(op_addr2) << "\n";
+                BytecodeOperand op_len = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op3(Len ): "
+                              << formatOperandDebug(op_len) << "\n";
+                int addr1 = getValue(op_addr1);
+                int addr2 = getValue(op_addr2);
+                int len = getValue(op_len);
+                if (len < 0)
+                    throw std::runtime_error(
+                        "CMP_MEM length cannot be negative");
+                if (addr1 < 0 || addr1 + len > ram.size() || addr2 < 0 ||
+                    addr2 + len > ram.size()) {
+                    throw std::runtime_error(
+                        "CMP_MEM memory access out of bounds");
+                }
+                // Use memcmp directly
+                int result = memcmp(&ram[addr1], &ram[addr2], len);
+                zeroFlag = (result == 0);
+                signFlag = (result < 0);
+                break;
+            }
+
+            case MNI: {
+                std::string functionName =
+                    readBytecodeString(); // Read Module.Function\0
+                if (debugMode)
+                    std::cout
+                        << "[Debug][Interpreter]   MNI Func: " << functionName
+                        << "\n";
+                std::vector<BytecodeOperand> mniArgs;
+                while (true) {
+                    BytecodeOperand arg = nextRawOperand();
+                    if (arg.type == OperandType::NONE) {
+                        if (debugMode)
+                            std::cout
+                                << "[Debug][Interpreter]     End MNI Args\n";
+                        break; // End of arguments marker
+                    }
+                    if (debugMode)
+                        std::cout << "[Debug][Interpreter]     MNI Arg : "
+                                  << formatOperandDebug(arg) << "\n";
+                    mniArgs.push_back(arg);
+                }
+                if (mniRegistry.count(functionName)) {
+                    mniRegistry[functionName](
+                        *this,
+                        mniArgs); // Call the registered function
+                } else {
+                    throw std::runtime_error(
+                        "Unregistered MNI function called: " + functionName);
+                }
+                break;
+            }
+
+            default:
+                throw std::runtime_error("Unimplemented or unknown opcode "
+                                         "encountered during execution: 0x" +
+                                         std::to_string(opcode));
+            }
+
+            // Optional: Print changed registers
+            if (debugMode) {
+                for (size_t i = 0; i < registers.size(); ++i) {
+                    if (registers[i] != regsBefore[i]) {
+                        std::cout << "[Debug][Interpreter]     Reg Change: R"
+                                  << i << " = " << registers[i] << " (was "
+                                  << regsBefore[i] << ")\n";
+                    }
+                }
+                // Print flag changes if CMP or relevant instruction executed
+                // (Requires tracking if flags were potentially modified by the
+                // opcode)
+            }
+
+        } catch (const std::exception &e) {
+            // Print MNI stack trace if any
+
+            if (!mniCallStack.empty()) {
+                std::cerr << "MNI Call Stack (most recent call last):\n";
+                for (auto it = mniCallStack.rbegin(); it != mniCallStack.rend();
+                     ++it) {
+                    std::cerr << "  at " << *it << std::endl;
+                }
+            }
+            std::cerr << "\nRuntime Error at bytecode offset 0x" << std::hex
+                      << currentIp << std::dec << " (Opcode: 0x" << std::hex
+                      << static_cast<int>(opcode) << std::dec
+                      << "): " << e.what() << std::endl;
+            // Stack trace if -t or --trace
+            if (stackTrace) {
+                std::cerr << "\nStack Trace (most recent call first):\n";
+                struct stack_frame frame;
+                frame.rbp = registers[6]; // ebp
+                frame.ip = ip;
+
+                while (frame.rbp != 0) {
+                    std::cerr << getAddr(frame.ip, lbls) << std::endl;
+                    frame.ip = readRamInt(frame.rbp + 4);
+                    frame.rbp = readRamInt(frame.rbp);
+                }
+                std::cerr << "\n";
+            }
+            static const char *regNames[24] = {
+
+                "RAX", "RBX", "RCX", "RDX", "RSI",
+                "RDI", "RBP", "RSP",
+
+                "R0",  "R1",  "R2",  "R3",  "R4",
+                "R5",  "R6",  "R7",
+
+                "R8",  "R9",  "R10", "R11", "R12",
+                "R13", "R14", "R15"
+
+            };
+
+            // Dump registers with names and color
+            std::cerr << "Register dump:\n";
+            // Dump registers as an ASCII box (8 per row)
+            const int regsPerRow = 8;
+            const int totalRegs = registers.size();
+            const int rows = (totalRegs + regsPerRow - 1) / regsPerRow;
+            const int colWidth = 12; // Match hex value width
+            std::cerr << "+"
+                      << std::string(regsPerRow * (colWidth + 1) - 1, '-')
+                      << "+\n";
+            for (int row = 0; row < rows; ++row) {
+                // Header row: register names (centered, colWidth chars)
+                std::cerr << "|";
+                for (int col = 0; col < regsPerRow; ++col) {
+                    int idx = row * regsPerRow + col;
+                    if (idx < totalRegs) {
+                        std::string color;
+                        if (idx == 0)
+                            color = "\033[1;33m"; // RAX: yellow
+                        else if (idx == 6 || idx == 7)
+                            color = "\033[1;36m"; // RBP/RSP: cyan
+                        else
+                            color = "\033[1m";
+                        std::string name = regNames[idx];
+                        int pad = colWidth - name.length();
+                        int left = pad / 2, right = pad - left;
+                        std::cerr << color << std::string(left, ' ') << name
+                                  << std::string(right, ' ') << "\033[0m"
+                                  << "|";
+                    } else {
+                        std::cerr << std::string(colWidth, ' ') << "|";
+                    }
+                }
+                std::cerr << "\n|";
+                // Value row: decimal values (colWidth chars)
+                for (int col = 0; col < regsPerRow; ++col) {
+                    int idx = row * regsPerRow + col;
+                    if (idx < totalRegs) {
+                        std::cerr << std::setw(colWidth - 1) << registers[idx]
+                                  << " |";
+                    } else {
+                        std::cerr << std::string(colWidth, ' ') << "|";
+                    }
+                }
+
+                std::cerr << "\n|";
+                // Value row: hex values (colWidth chars)
+                for (int col = 0; col < regsPerRow; ++col) {
+                    int idx = row * regsPerRow + col;
+                    if (idx < totalRegs) {
+                        std::stringstream hexss;
+                        hexss << "0x" << std::hex << std::setw(8)
+                              << std::setfill('0') << registers[idx]
+                              << std::dec;
+                        std::string hexval = hexss.str();
+                        int pad = colWidth - hexval.length();
+                        int left = pad / 2, right = pad - left;
+                        std::cerr << std::string(left, ' ') << hexval
+                                  << std::string(right, ' ') << "|";
+                    } else {
+                        std::cerr << std::string(colWidth, ' ') << "|";
+                    }
+                }
+
+                std::cerr << "\n+"
+                          << std::string(regsPerRow * (colWidth + 1) - 1, '-')
+                          << "+\n";
+            }
+
+            std::cerr << "  ZF=" << zeroFlag << ", SF=" << signFlag << "\n";
+
             std::cerr << "\n";
+            // std::cerr << "\033[1;33mRAX\033[0m, \033[1;36mRBP/RSP\033[0m:
+            // special "
+            //              "registers\n";
+
+            throw; // Re-throw after logging context
         }
-        static const char *regNames[24] = {
-
-            "RAX", "RBX", "RCX", "RDX", "RSI",
-            "RDI", "RBP", "RSP",
-
-            "R0",  "R1",  "R2",  "R3",  "R4",
-            "R5",  "R6",  "R7",
-
-            "R8",  "R9",  "R10", "R11", "R12",
-            "R13", "R14", "R15"
-
-        };
-
-        // Dump registers with names and color
-        std::cerr << "Register dump:\n";
-        // Dump registers as an ASCII box (8 per row)
-        const int regsPerRow = 8;
-        const int totalRegs = registers.size();
-        const int rows = (totalRegs + regsPerRow - 1) / regsPerRow;
-        const int colWidth = 12; // Match hex value width
-        std::cerr << "+" << std::string(regsPerRow * (colWidth+1) - 1, '-')
-                  << "+\n";
-        for (int row = 0; row < rows; ++row) {
-          // Header row: register names (centered, colWidth chars)
-          std::cerr << "|";
-          for (int col = 0; col < regsPerRow; ++col) {
-            int idx = row * regsPerRow + col;
-            if (idx < totalRegs) {
-              std::string color;
-              if (idx == 0)
-                color = "\033[1;33m"; // RAX: yellow
-              else if (idx == 6 || idx == 7)
-                color = "\033[1;36m"; // RBP/RSP: cyan
-              else
-                color = "\033[1m";
-              std::string name = regNames[idx];
-              int pad = colWidth - name.length();
-              int left = pad / 2, right = pad - left;
-              std::cerr << color << std::string(left, ' ') << name
-                        << std::string(right, ' ') << "\033[0m" << "|";
-            } else {
-              std::cerr << std::string(colWidth, ' ') << "|";
-            }
-          }
-          std::cerr << "\n|";
-          // Value row: decimal values (colWidth chars)
-          for (int col = 0; col < regsPerRow; ++col) {
-            int idx = row * regsPerRow + col;
-            if (idx < totalRegs) {
-              std::cerr << std::setw(colWidth-1) << registers[idx] << " |";
-            } else {
-              std::cerr << std::string(colWidth, ' ') << "|";
-            }
-          }
-
-          std::cerr << "\n|";
-          // Value row: hex values (colWidth chars)
-          for (int col = 0; col < regsPerRow; ++col) {
-            int idx = row * regsPerRow + col;
-            if (idx < totalRegs) {
-              std::stringstream hexss;
-              hexss << "0x" << std::hex << std::setw(8) << std::setfill('0')
-                    << registers[idx] << std::dec;
-              std::string hexval = hexss.str();
-              int pad = colWidth - hexval.length();
-              int left = pad / 2, right = pad - left;
-              std::cerr << std::string(left, ' ') << hexval
-                        << std::string(right, ' ') << "|";
-            } else {
-              std::cerr << std::string(colWidth, ' ') << "|";
-            }
-          }
-
-          std::cerr << "\n+" << std::string(regsPerRow * (colWidth + 1) - 1, '-')
-                    << "+\n";
-        }
-
-        std::cerr << "  ZF=" << zeroFlag << ", SF=" << signFlag << "\n";
-
-        std::cerr << "\n";
-        // std::cerr << "\033[1;33mRAX\033[0m, \033[1;36mRBP/RSP\033[0m: special "
-        //              "registers\n";
-
-        throw; // Re-throw after logging context
     }
-  }
 }
 
 static std::vector<std::string> mniCallStackInternal;
@@ -1454,7 +1504,7 @@ static std::vector<std::string> mniCallStackInternal;
 void Interpreter::callMNI(const std::string &name,
                           const std::vector<BytecodeOperand> &args) {
 
-  // Use a static thread_local call stack for MNI stack tracing
+    // Use a static thread_local call stack for MNI stack tracing
 
     static thread_local std::vector<std::string> mniCallStackInternal;
     mniCallStackInternal.push_back(name);
@@ -1465,7 +1515,7 @@ void Interpreter::callMNI(const std::string &name,
             // Print stack trace on error
             std::cerr << "MNI Call Stack (most recent call last):\n";
             for (auto it = mniCallStackInternal.rbegin();
-                it != mniCallStackInternal.rend(); ++it) {
+                 it != mniCallStackInternal.rend(); ++it) {
                 std::cerr << "  at " << *it << std::endl;
             }
             mniCallStackInternal.pop_back();
@@ -1480,7 +1530,7 @@ void Interpreter::callMNI(const std::string &name,
 
 // --- Standalone Interpreter Main Function Definition ---
 
-int microasm_interpreter_main(int argc, char* argv[]) {
+int microasm_interpreter_main(int argc, char *argv[]) {
     // --- Argument Parsing for Standalone Interpreter ---
     std::string bytecodeFile;
     bool enableDebug = false;
@@ -1503,24 +1553,26 @@ int microasm_interpreter_main(int argc, char* argv[]) {
     }
 
     if (bytecodeFile.empty()) {
-        std::cerr << "Interpreter Usage: <bytecode.bin> [args...] [-d|--debug]" << std::endl;
+        std::cerr << "Interpreter Usage: <bytecode.bin> [args...] [-d|--debug]"
+                  << std::endl;
         return 1;
     }
 
-  // --- End Argument Parsing ---
+    // --- End Argument Parsing ---
 
     try {
-        Interpreter interpreter(65536, programArgs, enableDebug, stackTrace); // Pass debug flag
+        Interpreter interpreter(65536, programArgs, enableDebug,
+                                stackTrace); // Pass debug flag
         interpreter.load(bytecodeFile);
         interpreter.execute();
 
-    std::cout << "Execution finished successfully!"
-              << std::endl; // HLT used to provide its own message
-  } catch (const std::exception &e) {
-    // Error already logged in execute() or load()
-    std::cerr << "Execution failed: " << e.what() << std::endl;
-    return 1;
-  }
+        std::cout << "Execution finished successfully!"
+                  << std::endl; // HLT used to provide its own message
+    } catch (const std::exception &e) {
+        // Error already logged in execute() or load()
+        std::cerr << "Execution failed: " << e.what() << std::endl;
+        return 1;
+    }
 
-  return 0;
+    return 0;
 }
