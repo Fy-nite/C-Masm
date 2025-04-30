@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 
+add_compile_options(-fsanitize=address)
+add_compile_options(-g)
+add_link_options(-fsanitize=address)
+
 # Project Name
 project(MicroASM_Toolchain CXX)
 

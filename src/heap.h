@@ -24,14 +24,17 @@ struct heap_data {
     int start;
     int end;
 
-    struct heap_chunk *chunks;
-    int chunks_count;
+    int chunks;
+
+    struct heap_chunk *first;
 };
 
 struct heap_chunk {
     int size;
     int addr;
     bool free;
+    struct heap_chunk *next;
+    struct heap_chunk *prev;
 };
 
 void heap_init();
@@ -39,5 +42,7 @@ void heap_init();
 int mmalloc(int size);
 
 int mfree(int ptr);
+
+void defragment();
 
 #endif
