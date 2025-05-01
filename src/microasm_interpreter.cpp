@@ -98,7 +98,11 @@ BytecodeOperand Interpreter::nextRawOperand() {
                 "Unexpected end of bytecode reading operand value (IP: " +
                 std::to_string(ip) + ")");
         }
-        operand.value = *reinterpret_cast<const int *>(&bytecode_raw[ip]);
+        if (size >= 1) {operand.value = (bytecode_raw[ip+(size-1)]);}
+        if (size >= 2) {operand.value += (bytecode_raw[ip+(size-2)] << 8);}
+        if (size >= 3) {operand.value += (bytecode_raw[ip+(size-3)] << 16);}
+        if (size == 4) {operand.value +=  (bytecode_raw[ip] << 24);}
+
         if (size != 4)
             operand.value &= (1 << (8 * size)) - 1;
         ip += size;
@@ -494,7 +498,9 @@ void Interpreter::execute() {
     sp = registers[7];
     bp = registers[6];
 
-    while (ip < bytecode_raw.size()) {
+    bool exit = false;
+    
+    while (ip < bytecode_raw.size() && !exit) {
         int currentIp = ip;
         if (debugMode)
             std::cout << "[Debug][Interpreter] IP: 0x" << std::hex
@@ -1075,7 +1081,8 @@ void Interpreter::execute() {
             case HLT: {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter] HLT encountered.\n";
-                return;
+                exit = true; // exit loop
+                break;
             } // Halt execution
             case ARGC: {
                 BytecodeOperand op_dest = nextRawOperand();
@@ -1344,12 +1351,33 @@ void Interpreter::execute() {
                     std::cout << "[Debug][Interpreter]   Op2(size): "
                               << formatOperandDebug(op_size) << "\n";
 
-                int ptr = getValue(op_ptr);
+                int ptr = getRegisterIndex(op_ptr);
                 int size = getValue(op_size);
 
                 int result = mmalloc(size);
 
                 registers[ptr] = result; 
+                
+                zeroFlag = (result == 0);
+                signFlag = (result < 0);
+                break;
+            }
+            case FREE: { // FREE result ptr
+                BytecodeOperand op_result = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op1(result): "
+                              << formatOperandDebug(op_result) << "\n";
+                BytecodeOperand op_ptr = nextRawOperand();
+                if (debugMode)
+                    std::cout << "[Debug][Interpreter]   Op2(ptr): "
+                              << formatOperandDebug(op_ptr) << "\n";
+
+                int result_reg = getRegisterIndex(op_result);
+                int ptr = getValue(op_ptr);
+
+                int result = mfree(ptr);
+
+                registers[result_reg] = result; 
                 
                 zeroFlag = (result == 0);
                 signFlag = (result < 0);
@@ -1525,9 +1553,11 @@ void Interpreter::execute() {
             // special "
             //              "registers\n";
 
+            check_unfreed_memory(true); // cleanup heap
             throw; // Re-throw after logging context
         }
     }
+    check_unfreed_memory(); // cleanup memory and print unfreed memory
 }
 
 static std::vector<std::string> mniCallStackInternal;

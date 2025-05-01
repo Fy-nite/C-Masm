@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cctype>
 #include <cstring>
+#include "common_defs.h"
 
 // --- Shared enums/types (should match interpreter/compiler) ---
 enum OperandType {
@@ -19,34 +20,6 @@ enum OperandType {
     DATA_ADDRESS = 0x04,
     REGISTER_AS_ADDRESS = 0x05
 };
-
-enum Opcode {
-    MOV = 0x01, ADD, SUB, MUL, DIV, INC,
-    JMP, CMP, JE, JL, CALL, RET,
-    PUSH, POP,
-    OUT, COUT, OUTSTR, OUTCHAR,
-    HLT, ARGC, GETARG,
-    DB, LBL,
-    AND, OR, XOR, NOT, SHL, SHR,
-    MOVADDR, MOVTO,
-    JNE, JG, JLE, JGE,
-    ENTER, LEAVE,
-    COPY, FILL, CMP_MEM,
-    MNI,
-    IN
-};
-
-#pragma pack(push, 1)
-struct BinaryHeader {
-    uint32_t magic = 0;
-    uint16_t version = 0;
-    uint16_t reserved = 0;
-    uint32_t codeSize = 0;
-    uint32_t dataSize = 0;
-    uint32_t dbgSize = 0;
-    uint32_t entryPoint = 0;
-};
-#pragma pack(pop)
 
 const std::unordered_map<Opcode, std::string> opcodeToString = {
     {MOV, "MOV"}, {ADD, "ADD"}, {SUB, "SUB"}, {MUL, "MUL"}, {DIV, "DIV"}, {INC, "INC"},
@@ -59,7 +32,8 @@ const std::unordered_map<Opcode, std::string> opcodeToString = {
     {JNE, "JNE"}, {JG, "JG"}, {JLE, "JLE"}, {JGE, "JGE"},
     {ENTER, "ENTER"}, {LEAVE, "LEAVE"},
     {COPY, "COPY"}, {FILL, "FILL"}, {CMP_MEM, "CMP_MEM"},
-    {MNI, "MNI"}, {IN, "IN"}
+    {MNI, "MNI"}, {IN, "IN"}, 
+    {MALLOC, "MALLOC"}, {FREE, "FREE"}
 };
 
 const std::unordered_map<int, std::string> registerIndexToString = {
@@ -132,6 +106,8 @@ int getOperandCount(Opcode opcode) {
             return 1;
         case RET: case LEAVE: case HLT:
             return 0;
+        case MALLOC: case FREE:
+            return 2;
         case MNI:
             return -1; // special
         default:
@@ -329,7 +305,10 @@ int decoder_main(int argc, char* argv[]) {
                         if (tempIp + 1 + size > code.size())
                             throw std::runtime_error("Unexpected end of code segment while reading operand");
                         OperandType t = static_cast<OperandType>(code[tempIp++] & 0b1111);
-                        int v = *reinterpret_cast<const int*>(&code[tempIp]);
+                        int             v =  (code[tempIp+(size-1)]);
+                        if (size >= 2) {v += (code[tempIp+(size-2)] << 8);}
+                        if (size >= 3) {v += (code[tempIp+(size-3)] << 16);}
+                        if (size == 4) {v += (code[tempIp] << 24);}
                         if (size != 4) v = v & (1<<(8*(size)))-1;
                         tempIp += size;
                         operands.emplace_back(t, v);

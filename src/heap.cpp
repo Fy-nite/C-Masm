@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string>
 #include "heap.h"
+#include "common_defs.h"
 
 struct heap_data metadata;
 
@@ -34,28 +35,25 @@ struct heap_chunk* get_last() {
 }
 
 void heap_init() {
-    metadata.size = 65436;
+    metadata.size = MEMORY_SIZE-STACK_SIZE;
     metadata.used = 0;
-    metadata.free = 65436;
+    metadata.free = metadata.size;
 
-    metadata.start = 100;
-    metadata.end = 100;
+    metadata.start = 0;
+    metadata.end = 0;
 
     metadata.chunks = 0;
     metadata.first = NULL;
 }
 
 int mmalloc(int size) {
-    std::cout << "Allocating " << std::to_string(size) << " bytes on the heap" << std::endl;
         // make new chuck of size (size)
     if (size <= 0) 
-        return HEAP_ERR_INVALID_ARG
+        return HEAP_ERR_INVALID_ARG;
     else if (metadata.free < size) 
-        return HEAP_ERR_OUT_OF_SPACE
+        return HEAP_ERR_OUT_OF_SPACE;
     
-    struct heap_chunk *new_chunk = (struct heap_chunk*)malloc(sizeof(struct heap_chunk));
-    new_chunk->free = false;
-    new_chunk->size = size;
+    struct heap_chunk *new_chunk = internal_make_chunk(metadata.end, size);
 
     struct heap_chunk *c = metadata.first;
     while (c != NULL) {
@@ -102,12 +100,20 @@ int mmalloc(int size) {
     return new_chunk->addr;
 }
 
+struct heap_chunk* internal_make_chunk(int addr, int size) {
+    struct heap_chunk* c = (struct heap_chunk*)malloc(sizeof(heap_chunk));
+    c->size = size;
+    c->addr = addr;
+    c->free = false;
+    return c;
+}
+
 int mfree(int ptr) {
     // free chunk ptr
     struct heap_chunk *c = metadata.first;
     while (c != NULL && c->addr <= ptr) {
         if (c->addr == ptr) {
-            if (c->free) {return HEAP_ERR_ALREADY_FREE}
+            if (c->free) {return HEAP_ERR_ALREADY_FREE;}
             c->free = true;
             defragment();
             return 0;
@@ -131,5 +137,29 @@ void defragment() {
     if (last->free) {
         metadata.end -= last->size;
         delete_chunk(last);
+    }
+}
+
+void check_unfreed_memory() {
+    struct heap_chunk *c = metadata.first;
+    while (c != NULL) {
+        if (!c->free) {
+            std::cout << "Warning: Unfreed memory at address 0x" << std::hex << c->addr << std::dec << " with size 0x" << std::hex << c->size << std::dec << std::endl;
+        }
+        struct heap_chunk *c_next = c->next;
+        free(c);
+        c = c_next;
+    }
+}
+
+void check_unfreed_memory(bool silence) {
+    if (!silence) {
+        return check_unfreed_memory();
+    }
+    struct heap_chunk *c = metadata.first;
+    while (c != NULL) {
+        struct heap_chunk *c_next = c->next;
+        free(c);
+        c = c_next;
     }
 }

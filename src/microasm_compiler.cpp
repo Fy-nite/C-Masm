@@ -27,12 +27,17 @@
 // Filesystem includes
 #if __has_include(<filesystem>)
     #include <filesystem>
-    namespace fs = std::filesystem;
 #elif __has_include(<experimental/filesystem>)
     #include <experimental/filesystem>
     namespace fs = std::experimental::filesystem;
 #else
     #error "Neither <filesystem> nor <experimental/filesystem> is available."
+#endif
+#ifdef _WIN32
+namespace fs = std::experimental::filesystem;
+#endif
+#ifndef _WIN32
+namespace fs = std::filesystem;
 #endif
 
 // Include own header FIRST
@@ -422,6 +427,7 @@ Opcode Compiler::getOpcode(const std::string& mnemonic) {
         {"JNE", JNE}, {"JG", JG}, {"JLE", JLE}, {"JGE", JGE},
         {"ENTER", ENTER}, {"LEAVE", LEAVE},
         {"COPY", COPY}, {"FILL", FILL}, {"CMP_MEM", CMP_MEM},
+        {"MALLOC", MALLOC}, {"FREE", FREE},
         {"MNI", MNI},
         {"IN", IN}
     };
@@ -499,7 +505,6 @@ void Compiler::compile(const std::string& outputFile) {
             }
             // Write end marker: type=NONE, value=0
             out.put(static_cast<char>(OperandType::NONE));
-            int32_t zero = 0;
             byteOffset += 1;
 
         } else {

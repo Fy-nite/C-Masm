@@ -1,0 +1,4 @@
+lbl main
+MALLOC rax 10
+MALLOC rbx 10
+out 1 rcx

@@ -11,10 +11,10 @@
 #include <stdlib.h>
 #include <iostream>
 
-#define HEAP_ERR_ALREADY_FREE -1;
-#define HEAP_ERR_NOT_ALLOCATED -2;
-#define HEAP_ERR_OUT_OF_SPACE -3;
-#define HEAP_ERR_INVALID_ARG -4;
+#define HEAP_ERR_ALREADY_FREE -1
+#define HEAP_ERR_NOT_ALLOCATED -2
+#define HEAP_ERR_OUT_OF_SPACE -3
+#define HEAP_ERR_INVALID_ARG -4
 
 struct heap_data {
     int size;
@@ -27,6 +27,8 @@ struct heap_data {
     int chunks;
 
     struct heap_chunk *first;
+
+    int stack;
 };
 
 struct heap_chunk {
@@ -44,5 +46,10 @@ int mmalloc(int size);
 int mfree(int ptr);
 
 void defragment();
+
+void check_unfreed_memory();
+void check_unfreed_memory(bool silence);
+
+struct heap_chunk* internal_make_chunk(int addr, int size);
 
 #endif

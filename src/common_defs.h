@@ -15,6 +15,9 @@
 #endif
 // --- End API Macros ---
 
+#define MEMORY_SIZE 65536
+#define STACK_SIZE 2048
+
 // Define a simple binary header structure
 struct BinaryHeader {
     uint32_t magic = 0x4D53414D; // "MASM" in ASCII (little-endian)

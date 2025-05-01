@@ -1,5 +1,5 @@
 lbl main
-mov rax 15 ; allocate 15 bytes
+MALLOC rax 15
 out 1 rax
 CMP rax 0 ; Err codes are negative
 jl #error
@@ -19,7 +19,7 @@ MOVTO rax 12 33  ; !
 MOVTO rax 13 10  ; \n
 MOVTO rax 14 0   ; null terminator
 out 1 $rax
-mov rax rax ; Free the 15 bytes and set rax to zero (if free success else rax = the error code)
+FREE rax rax ; Free the 15 bytes and set rax to zero (if free success else rax = the error code)
 hlt
 lbl error
 DB $100 "Error while allocating memory: "
