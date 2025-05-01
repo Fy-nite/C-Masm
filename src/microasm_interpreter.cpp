@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include "heap.h"
+#include "operand_types.h"
 std::vector<std::string> mniCallStack;
 #define VERSION 2
 // Include own header FIRST
@@ -22,6 +23,54 @@ std::vector<std::string> mniCallStack;
 std::map<std::string, MniFunctionType> mniRegistry;
 
 std::unordered_map<int, std::string> lbls; // known labels
+
+void Interpreter::writeToOperand(BytecodeOperand op, int val, int size) {
+    switch (op.type)
+    {
+        case OperandType::LABEL_ADDRESS:
+        case OperandType::IMMEDIATE:
+        case OperandType::NONE:
+            std::cerr << "Attempted to write to a immediate value" << std::endl;
+            break;
+        
+        case OperandType::REGISTER:
+            registers[getRegisterIndex(op)] = val;
+            break;
+
+        case OperandType::DATA_ADDRESS:
+            if (size >= 1) {ram[op.value+size-1] = val;}
+            if (size >= 2) {ram[op.value+size-2] = val << 8;}
+            if (size >= 3) {ram[op.value+size-3] = val << 16;}
+            if (size == 4) {ram[op.value]        = val << 24;}
+
+        case OperandType::REGISTER_AS_ADDRESS:
+            int reg = getRegisterIndex(op);
+            if (size >= 1) {ram[reg+size-1] = val;}
+            if (size >= 2) {ram[reg+size-2] = val << 8;}
+            if (size >= 3) {ram[reg+size-3] = val << 16;}
+            if (size == 4) {ram[reg]        = val << 24;}
+            break;
+    }
+}
+
+int Interpreter::getRamAddr(BytecodeOperand op) {
+    switch (op.type)
+    {
+        case OperandType::LABEL_ADDRESS:
+        case OperandType::IMMEDIATE:
+        case OperandType::NONE:
+        case OperandType::REGISTER:
+            throw std::runtime_error("Cannot get ram address for register");
+            break;
+
+        case OperandType::REGISTER_AS_ADDRESS:
+            return registers[op.value];
+
+        case OperandType::DATA_ADDRESS:
+            return op.value;
+    }
+    throw std::runtime_error("Cannot get ram address for unknown");
+}
 
 // Define the MNI registration function
 void registerMNI(const std::string &module, const std::string &name,
@@ -673,10 +722,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Src ): "
                               << formatOperandDebug(op_src) << "\n";
-                int dest_reg =
-                    getRegisterIndex(op_dest); // Destination must be register
-                registers[dest_reg] =
-                    getValue(op_src); // Get value from source (reg or imm)
+                writeToOperand(op_dest, getValue(op_src), 4);
                 break;
             }
             case ADD: {
@@ -688,9 +734,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Src ): "
                               << formatOperandDebug(op_src) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
-                registers[dest_reg] +=
-                    getValue(op_src); // Add value (reg or imm)
+                writeToOperand(op_dest, getValue(op_src) + getValue(op_dest), 4);
                 break;
             }
             case SUB: {
@@ -702,8 +746,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Src ): "
                               << formatOperandDebug(op_src) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
-                registers[dest_reg] -= getValue(op_src);
+                writeToOperand(op_dest, getValue(op_src) - getValue(op_dest), 4);
                 break;
             }
             case MUL: {
@@ -715,8 +758,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Src ): "
                               << formatOperandDebug(op_src) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
-                registers[dest_reg] *= getValue(op_src);
+                writeToOperand(op_dest, getValue(op_src) * getValue(op_dest), 4);
                 break;
             }
             case DIV: {
@@ -728,11 +770,10 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Src ): "
                               << formatOperandDebug(op_src) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
                 int src_val = getValue(op_src);
                 if (src_val == 0)
                     throw std::runtime_error("Division by zero");
-                registers[dest_reg] /= src_val;
+                writeToOperand(op_dest, src_val + getValue(op_dest), 4);
                 break;
             }
             case INC: {
@@ -740,8 +781,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op1(Dest): "
                               << formatOperandDebug(op_dest) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
-                registers[dest_reg]++;
+                writeToOperand(op_dest, getValue(op_dest)+1, 4);
                 break;
             }
 
@@ -1031,49 +1071,13 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op1(Dest): "
                               << formatOperandDebug(op_dest) << "\n";
-                // Destination can be REGISTER_AS_ADDRESS or DATA_ADDRESS
-                int destAddr;
-                if (op_dest.type == OperandType::REGISTER_AS_ADDRESS) {
-                    int reg_index = op_dest.value;
-                    if (reg_index < 0 || reg_index >= registers.size()) {
-                        throw std::runtime_error("IN: Invalid register index "
-                                                 "for REGISTER_AS_ADDRESS: " +
-                                                 std::to_string(reg_index));
-                    }
-                    destAddr = registers[reg_index];
-                } else if (op_dest.type == OperandType::DATA_ADDRESS) {
-                    destAddr = op_dest.value;
-                } else {
-                    throw std::runtime_error(
-                        "IN requires a destination operand of type "
-                        "REGISTER_AS_ADDRESS "
-                        "($R<n>) or DATA_ADDRESS ($<label>)");
-                }
-
-                if (destAddr < 0 ||
-                    destAddr >=
-                        ram.size()) { // Basic check, might need more space
-                    throw std::runtime_error("IN: Destination address " +
-                                             std::to_string(destAddr) +
-                                             " is out of RAM bounds");
-                }
 
                 std::string input;
                 std::getline(std::cin, input);
 
-                // Check if there's enough space in RAM
-                if (destAddr + input.size() + 1 >
-                    ram.size()) { // +1 for null terminator
-                    throw std::runtime_error(
-                        "IN: Not enough RAM space at address " +
-                        std::to_string(destAddr) +
-                        " for input string of size " +
-                        std::to_string(input.size()));
-                }
-
                 // Write input and null terminator to memory
-                std::copy(input.begin(), input.end(), ram.begin() + destAddr);
-                ram[destAddr + input.size()] = '\0';
+                std::copy(input.begin(), input.end(), ram.begin() + getRamAddr(op_dest));
+                ram[getRamAddr(op_dest) + input.size()] = '\0';
                 break;
             }
 
@@ -1089,8 +1093,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op1(Dest): "
                               << formatOperandDebug(op_dest) << "\n";
-                registers[getRegisterIndex(op_dest)] =
-                    cmdArgs.size(); // Use cmdArgs member
+                writeToOperand(op_dest, cmdArgs.size(), 4); // Use cmdArgs member
                 break;
             }
             case GETARG: {
@@ -1102,7 +1105,6 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Index): "
                               << formatOperandDebug(op_index) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
                 int index = getValue(op_index);
                 if (index < 0 || index >= cmdArgs.size()) {
                     throw std::runtime_error("GETARG index out of bounds: " +
@@ -1112,10 +1114,14 @@ void Interpreter::execute() {
                 // Need to copy string to RAM and store address.
                 // Simplified: Not implemented fully. Requires memory
                 // management.
-                registers[dest_reg] = 0; // Placeholder
-                std::cerr << "Warning: GETARG not fully implemented (string "
-                             "handling)."
-                          << std::endl;
+                // Update: WE HAVE MEMORY MANAGMENT NOW YIPPIE. time to implement this --carson
+                // code is expected to free memory
+                int str_addr = mmalloc(cmdArgs[index].length());
+
+                writeToOperand(op_dest, str_addr, 4);
+
+                std::copy(cmdArgs[index].begin(), cmdArgs[index].end(), ram.begin() + str_addr);
+                ram[str_addr + cmdArgs[index].size()] = '\0';
                 break;
             }
 
@@ -1129,8 +1135,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Src ): "
                               << formatOperandDebug(op_src) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
-                registers[dest_reg] &= getValue(op_src);
+                writeToOperand(op_dest, getValue(op_dest)&getValue(op_src), 4);
                 break;
             }
             case OR: {
@@ -1142,8 +1147,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Src ): "
                               << formatOperandDebug(op_src) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
-                registers[dest_reg] |= getValue(op_src);
+                writeToOperand(op_dest, getValue(op_dest)|getValue(op_src), 4);
                 break;
             }
             case XOR: {
@@ -1155,8 +1159,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Src ): "
                               << formatOperandDebug(op_src) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
-                registers[dest_reg] ^= getValue(op_src);
+                writeToOperand(op_dest, getValue(op_dest)^getValue(op_src), 4);
                 break;
             }
             case NOT: {
@@ -1164,8 +1167,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op1(Dest): "
                               << formatOperandDebug(op_dest) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
-                registers[dest_reg] = ~registers[dest_reg];
+                writeToOperand(op_dest, ~getValue(op_dest), 4);
                 break;
             }
             case SHL: {
@@ -1177,8 +1179,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Count): "
                               << formatOperandDebug(op_count) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
-                registers[dest_reg] <<= getValue(op_count);
+                writeToOperand(op_dest, getValue(op_dest)<<getValue(op_count), 4);
                 break;
             }
             case SHR: {
@@ -1190,8 +1191,7 @@ void Interpreter::execute() {
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op2(Count): "
                               << formatOperandDebug(op_count) << "\n";
-                int dest_reg = getRegisterIndex(op_dest);
-                registers[dest_reg] >>= getValue(op_count);
+                writeToOperand(op_dest, getValue(op_dest)>>getValue(op_count), 4);
                 break;
             } // Arithmetic right shift
 
@@ -1351,12 +1351,11 @@ void Interpreter::execute() {
                     std::cout << "[Debug][Interpreter]   Op2(size): "
                               << formatOperandDebug(op_size) << "\n";
 
-                int ptr = getRegisterIndex(op_ptr);
                 int size = getValue(op_size);
 
                 int result = mmalloc(size);
 
-                registers[ptr] = result; 
+                writeToOperand(op_ptr, result, 4);
                 
                 zeroFlag = (result == 0);
                 signFlag = (result < 0);
@@ -1372,12 +1371,11 @@ void Interpreter::execute() {
                     std::cout << "[Debug][Interpreter]   Op2(ptr): "
                               << formatOperandDebug(op_ptr) << "\n";
 
-                int result_reg = getRegisterIndex(op_result);
                 int ptr = getValue(op_ptr);
 
                 int result = mfree(ptr);
 
-                registers[result_reg] = result; 
+                writeToOperand(op_result, result, 4);
                 
                 zeroFlag = (result == 0);
                 signFlag = (result < 0);

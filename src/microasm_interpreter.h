@@ -57,6 +57,8 @@ private: // Private members
     void initializeMNIFunctions();
     std::string formatOperandDebug(const BytecodeOperand& op);
     int getOperandSize(char type);
+    void writeToOperand(BytecodeOperand op, int val, int size);
+    int getRamAddr(BytecodeOperand op);
 
 public: // Public methods including memory access for C API
     // Constructor
