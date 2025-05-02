@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <list>
 #include <sstream>
 #include <unordered_map>
 #include <vector>
@@ -77,6 +78,13 @@ int getmin(int i)
     return 8;
 }
 
+std::list<MathOperatorToken> getMathOperatorTokens(std::string op) {
+    op = op.substr(1, op.length()-2);
+    for (int i=0;i<op.length();i++) {
+        
+    }
+}
+
 int calculateOperandSize(std::string op) {
     std::string op2 = op;
     if (op2[0] == '$') {
@@ -86,6 +94,8 @@ int calculateOperandSize(std::string op) {
         return 1;
     } else if (op2[0] == '#') {
         return 4;
+    } else if (op2[0] == '[') {
+        std::list<MathOperatorToken> tokens = getMathOperatorTokens(op); 
     } else {
         return getmin(std::stoi(op2));
     }
@@ -395,7 +405,14 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
             Instruction instr;
             instr.opcode = getOpcode(upperToken);
             std::string operand;
+            std::string tmp;
             while (stream >> operand) {
+                if (operand.find("[") != std::string::npos) {
+                    while (operand.find("]") == std::string::npos) {
+                        stream >> tmp;
+                        operand += tmp;
+                    }
+                }
                 instr.operands.push_back(operand);
             }
             instructions.push_back(instr);
@@ -580,6 +597,9 @@ ResolvedOperand Compiler::resolveOperand(const std::string& operand, Opcode cont
                 } else {
                     throw std::runtime_error("Unknown register format for $ operand: " + operand);
                 }
+            } else if (operand.length() > 1 && toupper(operand[1]) == '[') { // square brackets like $[rax + 4]
+                std::string operand_short = operand.substr(2, operand.length()-3);
+                std::cout << operand_short << std::endl;
             } else {
                 bool isNumber = true;
                 std::string numStr = operand.substr(1);

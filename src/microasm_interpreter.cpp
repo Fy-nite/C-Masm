@@ -38,17 +38,10 @@ void Interpreter::writeToOperand(BytecodeOperand op, int val, int size) {
             break;
 
         case OperandType::DATA_ADDRESS:
-            if (size >= 1) {ram[op.value+size-1] = val;}
-            if (size >= 2) {ram[op.value+size-2] = val << 8;}
-            if (size >= 3) {ram[op.value+size-3] = val << 16;}
-            if (size == 4) {ram[op.value]        = val << 24;}
+            writeRamInt(op.value, val);
 
         case OperandType::REGISTER_AS_ADDRESS:
-            int reg = getRegisterIndex(op);
-            if (size >= 1) {ram[reg+size-1] = val;}
-            if (size >= 2) {ram[reg+size-2] = val << 8;}
-            if (size >= 3) {ram[reg+size-3] = val << 16;}
-            if (size == 4) {ram[reg]        = val << 24;}
+            writeRamInt(registers[op.value], val);
             break;
     }
 }

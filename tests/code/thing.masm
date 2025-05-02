@@ -1,0 +1,20 @@
+lbl func
+MOVADDR rax rbp 8
+MOVADDR rbx rbp 4
+cmp rax 10
+jne #end
+cmp rbx 5
+jne #add
+mul rax rbx
+jmp #end
+lbl add
+add rax rbx
+lbl end
+ret
+
+lbl main
+push 1
+push 2
+call #func
+out 1 rax
+hlt
