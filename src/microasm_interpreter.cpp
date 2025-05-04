@@ -606,9 +606,84 @@ std::string getAddr(int ip, std::unordered_map<int, std::string> dbgData) {
     return ret;
 }
 
+std::string PS1 = (char*)"> ";
+void Interpreter::debugger_init() {
+    char* value = std::getenv("MasmDebuggerPS1");
+    if (value != NULL) {PS1 = value;}
+    std::cout << "\nWelcome to the MASM debugger. Run help for a list of all commands\n";
+}
+
+int steps = 0;
+bool continue_ran = false;
+std::vector<std::string> prev_cmd;
+
+void Interpreter::debugger() {
+    if (steps > 0) {
+        steps--;
+        return;
+    }
+    if (continue_ran) {
+        return;
+    }
+    while (true) {
+        std::cout << PS1 << std::flush;
+        std::string input;
+        std::getline(std::cin, input);
+
+        std::vector<std::string> tokens;
+
+        if (input.length() == 0) {
+            tokens = prev_cmd;
+        } else {
+            std::stringstream ss(input);
+            std::string token;
+            while (std::getline(ss, token, ' ')) {
+                tokens.push_back(token);
+            }
+        }
+
+        std::string cmd = tokens[0];
+        if (cmd == "step" | cmd == "s") {
+            if (tokens.size() > 1) {
+                steps = std::stoi(tokens[1])-1;
+            }
+            return;
+        } else if (cmd == "continue" | cmd == "c") {
+            continue_ran = true;
+            return;
+        } else if (cmd == "exit") {
+            std::cout << "Goodbye!" << std::endl;
+            exit(0);
+        } else if (cmd == "status") {
+            std::cout << "Debug Labels: ";
+            if (lbls.size() > 0) {
+                std::cout << "Y" << std::endl;
+            } else {
+                std::cout << "N" << std::endl;
+            }
+        } else if (cmd == "addr") {
+            std::cout << "Current IP: 0x" << std::hex << ip << std::dec;
+            if (lbls.size() > 0) {
+                std::cout << " (" << getAddr(ip, lbls) << ")";
+            } 
+            std::cout << std::endl;
+        } else if (cmd == "help") {
+            std::cout << "Debugger commands:" << std::endl;
+            std::cout << "    help - Show this message" << std::endl;
+            std::cout << "    step <amount> - step one instruction or <amount> instructions" << std::endl;
+            std::cout << "    s <amount> - aliases of step <amount>" << std::endl;
+            std::cout << "    continue - run the program until the program exits" << std::endl;
+            std::cout << "    c - aliases of continue" << std::endl;
+            std::cout << "    status - status of the program" << std::endl;
+            std::cout << "    addr - current address" << std::endl;
+            std::cout << "    exit - quit the program" << std::endl;
+        } else {
+            std::cout << "Unknown command: " << cmd << std::endl;
+        }
+    }
+}
+
 void Interpreter::execute() {
-    if (debugMode)
-        std::cout << "[Debug][Interpreter] Starting execution...\n";
     // Reset flags before execution? Or assume they persist? Assume reset for
     // now.
     zeroFlag = false;
@@ -620,8 +695,9 @@ void Interpreter::execute() {
     bp = registers[6];
 
     bool exit = false;
-    
+    if (debugMode) debugger_init();
     while (ip < bytecode_raw.size() && !exit) {
+        if (debugMode) debugger();
         int currentIp = ip;
         if (debugMode)
             std::cout << "[Debug][Interpreter] IP: 0x" << std::hex

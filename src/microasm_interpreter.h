@@ -60,6 +60,8 @@ private: // Private members
     int getOperandSize(char type);
     void writeToOperand(BytecodeOperand op, int val, int size);
     int getRamAddr(BytecodeOperand op);
+    void debugger();
+    void debugger_init();
 
 public: // Public methods including memory access for C API
     // Constructor
