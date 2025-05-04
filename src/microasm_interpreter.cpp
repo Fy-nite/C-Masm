@@ -278,11 +278,11 @@ int Interpreter::readRamNum(int address, int size) {
         throw std::runtime_error("Memory read out of bounds at address: " +
                                  std::to_string(address));
     }
-    int             ret =  (ram[address]);
+    unsigned int    ret =  (unsigned char)(ram[address]);
     if (size >= 2) {ret += (ram[address+1] << 8);}
     if (size >= 3) {ret += (ram[address+2] << 16);}
     if (size >= 4) {ret += (ram[address+3] << 24);}
-    return ret;
+    return (int)ret;
 }
 
 void Interpreter::writeRamNum(int address, int value, int size) {
@@ -532,7 +532,6 @@ void Interpreter::load(const std::string &bytecodeFile) {
             int addr = *(int *)dbg;
             dbg += sizeof(int);
             lbls[addr] = str;
-            std::cout << std::to_string(addr) << ":" << str << std::endl;
         }
         free(dbg_og);
     }
@@ -625,14 +624,14 @@ std::string print_ip(int ip) {
     return ss.str();
 }
 
-std::stringstream stdout;
+std::stringstream dbg_output;
 
-void Interpreter::debugger() {
+void Interpreter::debugger(bool end) {
     if (std::find(breakpoints.begin(), breakpoints.end(), ip) != breakpoints.end()) {
         std::cout << "Breakpoint hit at " << print_ip(ip) << std::endl;
         continue_ran = false;
         steps = 0;
-    } else {
+    } else if (!end) {
         if (steps > 0) {
             steps--;
             return;
@@ -640,6 +639,8 @@ void Interpreter::debugger() {
         if (continue_ran) {
             return;
         }
+    } else {
+        std::cout << "\nProgram finished" << std::endl;
     }
     while (true) {
         std::cout << PS1 << std::flush;
@@ -684,8 +685,13 @@ void Interpreter::debugger() {
             } else {
                 addr = std::stoi(lbl);
             }
-
-            breakpoints.push_back(addr);
+            if (std::find(breakpoints.begin(), breakpoints.end(), addr) != breakpoints.end()) {
+                breakpoints.erase(std::remove(breakpoints.begin(), breakpoints.end(), addr), breakpoints.end());
+                std::cout << "Removed breakpoint at " << print_ip(addr) << std::endl;
+            } else {
+                breakpoints.push_back(addr);
+                std::cout << "Put breakpoint at " << print_ip(addr) << std::endl;
+            }
 
         } else if (cmd == "continue" | cmd == "c") {
             continue_ran = true;
@@ -700,6 +706,8 @@ void Interpreter::debugger() {
             } else {
                 std::cout << "N" << std::endl;
             }
+        } else if (cmd == "stdout") {
+            std::cout << dbg_output.str();
         } else if (cmd == "addr") {
             std::cout << "Current IP: " << print_ip(ip) << std::endl;
         } else if (cmd == "help") {
@@ -711,6 +719,7 @@ void Interpreter::debugger() {
             std::cout << "    b (addr) - aliases of breakpoint (addr)" << std::endl;
             std::cout << "    continue - run the program until the program exits" << std::endl;
             std::cout << "    c - aliases of continue" << std::endl;
+            std::cout << "    stdout - all text outputted so far from out and its variations" << std::endl;
             std::cout << "    status - status of the program" << std::endl;
             std::cout << "    addr - current address" << std::endl;
             std::cout << "    exit - quit the program" << std::endl;
@@ -1158,8 +1167,8 @@ void Interpreter::execute() {
                             "OUT: Data address out of RAM bounds: " +
                             std::to_string(op_val.value));
                     }
-                    out_stream << readRamString(
-                        address); // Read and print the string from RAM
+                    out_stream << readRamString(address); // Read and print the string from RAM
+                    if (debugMode) dbg_output << readRamString(address); // Read and print the string from RAM
                     break;
                 }
                 case OperandType::REGISTER_AS_ADDRESS: {
@@ -1177,19 +1186,19 @@ void Interpreter::execute() {
                             std::to_string(reg_index) + " (" +
                             std::to_string(address) + ") is out of RAM bounds");
                     }
-                    out_stream << readRamString(
-                        address); // Read and print the string from RAM
+                    out_stream << readRamString(address); // Read and print the string from RAM
+                    if (debugMode) dbg_output << readRamString(address); // Read and print the string from RAM
                     break;
                 }
                 case OperandType::REGISTER: {
                     int reg_val = registers[getRegisterIndex(op_val)];
-                    out_stream
-                        << reg_val; // Print the integer value in the register
+                    out_stream << reg_val; // Print the integer value in the register
+                    if (debugMode) dbg_output << reg_val;
                     break;
                 }
                 case OperandType::IMMEDIATE: {
-                    out_stream
-                        << op_val.value; // Print the immediate integer value
+                    out_stream << op_val.value; // Print the immediate integer value
+                    if (debugMode) dbg_output << op_val.value; 
                     break;
                 }
                 default:
@@ -1213,8 +1222,8 @@ void Interpreter::execute() {
                 if (port != 1 && port != 2)
                     throw std::runtime_error("Invalid port for COUT: " +
                                              std::to_string(port));
-                out_stream << static_cast<char>(
-                    getValue(op_val, 4)); // Output char value
+                out_stream << static_cast<char>(getValue(op_val, 4)); // Output char value
+                if (debugMode) dbg_output << static_cast<char>(getValue(op_val, 4));
                 break;
             }
             case OUTSTR: { // Prints string from RAM address IN REGISTER
@@ -1240,6 +1249,7 @@ void Interpreter::execute() {
                 int len = getValue(op_len, 4);
                 for (int i = 0; i < len; ++i) {
                     out_stream << readRamChar(addr + i); // Read char by char
+                    if (debugMode) dbg_output << readRamChar(addr + i);
                 }
                 // No automatic newline for OUTSTR
                 break;
@@ -1261,6 +1271,7 @@ void Interpreter::execute() {
 
                 int addr = getValue(op_addr, 4);
                 out_stream << readRamChar(addr); // Read single char
+                if (debugMode) dbg_output << readRamChar(addr);
                 // No automatic newline for OUTCHAR
                 break;
             }
@@ -1753,6 +1764,7 @@ void Interpreter::execute() {
         }
     }
     check_unfreed_memory(); // cleanup memory and print unfreed memory
+    if (debugMode) debugger(true); // Allow for some last minute commands
 }
 
 static std::vector<std::string> mniCallStackInternal;
