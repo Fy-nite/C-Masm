@@ -532,6 +532,7 @@ void Interpreter::load(const std::string &bytecodeFile) {
             int addr = *(int *)dbg;
             dbg += sizeof(int);
             lbls[addr] = str;
+            std::cout << std::to_string(addr) << ":" << str << std::endl;
         }
         free(dbg_og);
     }
@@ -591,15 +592,13 @@ std::string getAddr(int ip, std::unordered_map<int, std::string> dbgData) {
         dbgPair.push_back(std::make_pair(it->first, it->second));
     }
     std::pair<int, std::string> *closest = nullptr;
+    int distance = 100000000;
     for (int idx = 0; idx < dbgPair.size(); idx++) {
         int d = ip - dbgPair[idx].first;
-        if (d < 0) {
-            closest = &dbgPair[idx - 1];
-            break;
+        if (d < distance && d >= 0) {
+            closest = &dbgPair[idx];
+            distance = d;
         }
-    }
-    if (closest == nullptr) {
-        closest = &dbgPair[dbgPair.size() - 1];
     }
     std::string ret = closest->second;
     ret += "+" + std::to_string(ip - closest->first) + "";
@@ -615,15 +614,32 @@ void Interpreter::debugger_init() {
 
 int steps = 0;
 bool continue_ran = false;
-std::vector<std::string> prev_cmd;
+std::string prev_cmd;
+std::vector<int> breakpoints;
+
+std::string print_ip(int ip) {
+    std::stringstream ss;
+    ss << "0x" << std::hex << ip;
+    if (lbls.size() > 0)
+        ss << " (" << getAddr(ip, lbls) << ")";
+    return ss.str();
+}
+
+std::stringstream stdout;
 
 void Interpreter::debugger() {
-    if (steps > 0) {
-        steps--;
-        return;
-    }
-    if (continue_ran) {
-        return;
+    if (std::find(breakpoints.begin(), breakpoints.end(), ip) != breakpoints.end()) {
+        std::cout << "Breakpoint hit at " << print_ip(ip) << std::endl;
+        continue_ran = false;
+        steps = 0;
+    } else {
+        if (steps > 0) {
+            steps--;
+            return;
+        }
+        if (continue_ran) {
+            return;
+        }
     }
     while (true) {
         std::cout << PS1 << std::flush;
@@ -632,22 +648,45 @@ void Interpreter::debugger() {
 
         std::vector<std::string> tokens;
 
-        if (input.length() == 0) {
-            tokens = prev_cmd;
-        } else {
-            std::stringstream ss(input);
-            std::string token;
-            while (std::getline(ss, token, ' ')) {
-                tokens.push_back(token);
-            }
+        if (input.length() == 0)
+            input = prev_cmd;
+        else
+            prev_cmd = input;
+        std::stringstream ss(input);
+        std::string token;
+        while (std::getline(ss, token, ' ')) {
+            tokens.push_back(token);
         }
 
         std::string cmd = tokens[0];
         if (cmd == "step" | cmd == "s") {
-            if (tokens.size() > 1) {
+            if (tokens.size() > 1)
                 steps = std::stoi(tokens[1])-1;
-            }
             return;
+        } else if (cmd == "breakpoint" | cmd == "b") {
+            std::string lbl;
+            if (tokens.size() > 1)
+                lbl = tokens[1];
+            else
+                std::cout << "Missing addr" << std::endl;
+            if (lbl[0] == '#' && lbls.size() == 0)
+                std::cout << "Cannot use a label as a address without debug labels in file (run compiler with -g to include debug info)" << std::endl;
+            int addr;
+            if (lbl.size() > 2 && lbl[2] == 'x') {
+                addr = std::stoi(lbl, nullptr, 16);
+            } else if (lbl[0] == '#') {
+                for (auto l : lbls) {
+                    if (l.second == lbl) {
+                        addr = l.first;
+                        break;
+                    }
+                }
+            } else {
+                addr = std::stoi(lbl);
+            }
+
+            breakpoints.push_back(addr);
+
         } else if (cmd == "continue" | cmd == "c") {
             continue_ran = true;
             return;
@@ -662,16 +701,14 @@ void Interpreter::debugger() {
                 std::cout << "N" << std::endl;
             }
         } else if (cmd == "addr") {
-            std::cout << "Current IP: 0x" << std::hex << ip << std::dec;
-            if (lbls.size() > 0) {
-                std::cout << " (" << getAddr(ip, lbls) << ")";
-            } 
-            std::cout << std::endl;
+            std::cout << "Current IP: " << print_ip(ip) << std::endl;
         } else if (cmd == "help") {
             std::cout << "Debugger commands:" << std::endl;
             std::cout << "    help - Show this message" << std::endl;
             std::cout << "    step <amount> - step one instruction or <amount> instructions" << std::endl;
             std::cout << "    s <amount> - aliases of step <amount>" << std::endl;
+            std::cout << "    breakpoint (addr) - pause execution at addr" << std::endl;
+            std::cout << "    b (addr) - aliases of breakpoint (addr)" << std::endl;
             std::cout << "    continue - run the program until the program exits" << std::endl;
             std::cout << "    c - aliases of continue" << std::endl;
             std::cout << "    status - status of the program" << std::endl;
@@ -700,14 +737,12 @@ void Interpreter::execute() {
         if (debugMode) debugger();
         int currentIp = ip;
         if (debugMode)
-            std::cout << "[Debug][Interpreter] IP: 0x" << std::hex
-                      << std::setw(4) << std::setfill('0') << currentIp
-                      << std::dec << ": ";
+            std::cout << "[Debug][Interpreter] IP: " << print_ip(ip);
 
         Opcode opcode = static_cast<Opcode>(bytecode_raw[ip++]);
 
         if (debugMode) {
-            std::cout << "Opcode 0x" << std::hex << std::setw(2)
+            std::cout << ": Opcode 0x" << std::hex << std::setw(2)
                       << std::setfill('0') << static_cast<int>(opcode)
                       << std::dec;
             // You might want a helper function to convert Opcode enum to string
