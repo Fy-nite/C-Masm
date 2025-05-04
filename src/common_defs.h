@@ -61,8 +61,42 @@ enum Opcode {
     // Heap
     MALLOC,
     FREE,
+    MOVB,
     // Pseudo-instructions (handled during compilation, not runtime)
     INCLUDE = 0xF2, // Placeholder for include directive logic (handled pre-compilation)
+};
+
+enum MathOperatorTokenType {
+    Operator, Register, Immediate, None
+};
+
+enum MathOperatorOperators {
+    op_ADD,
+    op_SUB,
+    op_MUL,
+    op_DIV,
+    op_BDIV, // backward div
+    op_LSR,
+    op_LSL,
+    op_AND,
+    op_OR,
+    op_XOR,
+    op_BSUB,
+    op_BLSR,
+    op_BLSL,
+    op_NONE
+};
+
+
+struct MathOperatorToken {
+    MathOperatorTokenType type;
+    int val;
+};
+struct MathOperator {
+    int reg;
+    MathOperatorToken other;
+    MathOperatorOperators operand;
+    bool can_be_simpler; // if true than immediate with reg as value
 };
 
 #endif // COMMON_DEFS_H

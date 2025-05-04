@@ -4,6 +4,8 @@ cmake_minimum_required(VERSION 3.10)
 #add_compile_options(-g)
 #add_link_options(-fsanitize=address -fsanitize=leak -fsanitize=undefined -Wall -Wpedantic)
 
+add_link_options(-lm)
+
 # Project Name
 project(MicroASM_Toolchain CXX)
 

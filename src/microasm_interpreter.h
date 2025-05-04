@@ -13,7 +13,8 @@
 // Structure to hold operand info read from bytecode
 struct BytecodeOperand {
     OperandType type;
-    int value;
+    long long value;
+    bool use_reg = false; // used only for math_operator.
 };
 
 // Forward declaration
@@ -70,6 +71,8 @@ public: // Public methods including memory access for C API
     // Memory access helpers (already public)
     int readRamInt(int address);
     void writeRamInt(int address, int value);
+    int readRamNum(int address, int size);
+    void writeRamNum(int address, int value, int size);
     char readRamChar(int address);
     void writeRamChar(int address, char value);
     std::string readRamString(int address);
@@ -79,8 +82,9 @@ public: // Public methods including memory access for C API
     void execute();
 
     // Public helper needed by MNI and internal logic (already public)
-    int getValue(const BytecodeOperand& operand);
-
+    int getValue(const BytecodeOperand& operand, int size);
+    int getAdvancedAddr(const BytecodeOperand operand);
+    
     // Add a way to set arguments after construction (needed for C API)
     void setArguments(const std::vector<std::string>& args);
 

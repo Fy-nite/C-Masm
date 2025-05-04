@@ -16,6 +16,7 @@
 #include <vector>
 #include <iomanip>
 #include <cstring>
+#include <math.h>
 #ifdef _WIN32
 #include <libloaderapi.h>
 #else
@@ -60,6 +61,70 @@ static std::vector<std::string> readFileLines(const std::string& filePath) {
 
 // --- Compiler Method Definitions ---
 
+int power_10_lookup[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+
+std::unordered_map<char, struct binary_search> token_search = {
+    {'R', {'R', false, {(MathOperatorTokenType)3, 0}, {
+        {'A', {'A', false, {(MathOperatorTokenType)3, 0}, {
+                {'X', {'X', true, {(MathOperatorTokenType)1, 0}, {}}},
+    
+        }}},
+        {'B', {'B', false, {(MathOperatorTokenType)3, 0}, {
+                {'X', {'X', true, {(MathOperatorTokenType)1, 1}, {}}},
+            {'P', {'P', true, {(MathOperatorTokenType)1, 6}, {}}},
+    
+        }}},
+        {'C', {'C', false, {(MathOperatorTokenType)3, 0}, {
+                {'X', {'X', true, {(MathOperatorTokenType)1, 2}, {}}},
+    
+        }}},
+        {'D', {'D', false, {(MathOperatorTokenType)3, 0}, {
+                {'X', {'X', true, {(MathOperatorTokenType)1, 3}, {}}},
+            {'I', {'I', true, {(MathOperatorTokenType)1, 5}, {}}},
+    
+        }}},
+        {'S', {'S', false, {(MathOperatorTokenType)3, 0}, {
+                {'I', {'I', true, {(MathOperatorTokenType)1, 4}, {}}},
+            {'P', {'P', true, {(MathOperatorTokenType)1, 7}, {}}},
+    
+        }}},
+        {'0', {'0', true, {(MathOperatorTokenType)1, 8}, {}}},
+        {'1', {'1', false, {(MathOperatorTokenType)3, 0}, {
+                {'0', {'0', true, {(MathOperatorTokenType)1, 18}, {}}},
+            {'1', {'1', true, {(MathOperatorTokenType)1, 19}, {}}},
+            {'2', {'2', true, {(MathOperatorTokenType)1, 20}, {}}},
+            {'3', {'3', true, {(MathOperatorTokenType)1, 21}, {}}},
+            {'4', {'4', true, {(MathOperatorTokenType)1, 22}, {}}},
+            {'5', {'5', true, {(MathOperatorTokenType)1, 23}, {}}},
+    
+        }}},
+        {'2', {'2', true, {(MathOperatorTokenType)1, 10}, {}}},
+        {'3', {'3', true, {(MathOperatorTokenType)1, 11}, {}}},
+        {'4', {'4', true, {(MathOperatorTokenType)1, 12}, {}}},
+        {'5', {'5', true, {(MathOperatorTokenType)1, 13}, {}}},
+        {'6', {'6', true, {(MathOperatorTokenType)1, 14}, {}}},
+        {'7', {'7', true, {(MathOperatorTokenType)1, 15}, {}}},
+        {'8', {'8', true, {(MathOperatorTokenType)1, 16}, {}}},
+        {'9', {'9', true, {(MathOperatorTokenType)1, 17}, {}}},
+    
+    }}},
+    {'+', {'+', true, {(MathOperatorTokenType)0, 0}, {}}},
+    {'-', {'-', true, {(MathOperatorTokenType)0, 1}, {}}},
+    {'*', {'*', true, {(MathOperatorTokenType)0, 2}, {}}},
+    {'/', {'/', true, {(MathOperatorTokenType)0, 3}, {}}},
+    {'>', {'>', false, {(MathOperatorTokenType)3, 0}, {
+        {'>', {'>', true, {(MathOperatorTokenType)0, 5}, {}}},
+    
+    }}},
+    {'<', {'<', false, {(MathOperatorTokenType)3, 0}, {
+        {'<', {'<', true, {(MathOperatorTokenType)0, 6}, {}}},
+    
+    }}},
+    {'|', {'|', true, {(MathOperatorTokenType)0, 7}, {}}},
+    {'&', {'&', true, {(MathOperatorTokenType)0, 8}, {}}},
+    {'^', {'^', true, {(MathOperatorTokenType)0, 9}, {}}},
+};
+
 void Compiler::setFlags(bool debug, bool write_dbg) {
     debugMode = debug;
     if (debugMode) std::cout << "[Debug][Compiler] Debug mode enabled.\n";
@@ -78,11 +143,141 @@ int getmin(int i)
     return 8;
 }
 
-std::list<MathOperatorToken> getMathOperatorTokens(std::string op) {
-    op = op.substr(1, op.length()-2);
-    for (int i=0;i<op.length();i++) {
-        
+int reverseDigits(int n) {
+    int revNum = 0;
+    while (n > 0) {
+        revNum = revNum * 10 + n % 10;
+        n = n / 10;
     }
+    return revNum;
+}
+
+MathOperator getMathOperatorTokens(std::string op) {
+    MathOperatorOperators o = op_NONE;
+    struct MathOperatorToken first = {None, 0};
+    struct MathOperatorToken other = {None, 0};
+    op = op.substr(2, op.length()-3);
+    std::unordered_map<char, struct binary_search> *cur_token = &token_search;
+    bool isnum = false;
+    int num = 0;
+    int numidx = 0;
+    for (int i=0;i<op.length();i++) {
+        char c = toupper(op[i]);
+        if (cur_token->count(c)) {
+            struct binary_search *data = &cur_token->at(c);
+            if (isnum && (data->final_token.type == Operator || data->further.begin()->second.final_token.type == Operator)) {
+                isnum = false;
+                numidx = 0;
+                num = reverseDigits(num);
+                if (first.type == None) {
+                    first = {Immediate, num};
+                } else if (other.type == None) {
+                    other = {Immediate, num};
+                } else {
+                    throw std::runtime_error("To many values");
+                }
+                num = 0;
+            } else if (isnum) {
+                throw std::runtime_error("Syntax Error");
+            }
+            cur_token = &data->further;
+            if (data->end) {
+                cur_token = &token_search;
+                switch (data->final_token.type)
+                {
+                    case Register:
+                        if (first.type == None) {
+                            first = data->final_token;
+                        } else if (other.type == None) {
+                            other = data->final_token;
+                        } else {
+                            throw std::runtime_error("To many values");
+                        }
+                        break;
+                    case Operator:
+                        if (o == op_NONE) {
+                            o = (MathOperatorOperators)data->final_token.val;
+                        } else {
+                            throw std::runtime_error("To many Operators");
+                        }
+                    default:
+                        break;
+                }
+            }
+        } else if (cur_token == &token_search && abs(c-'5') < 6) {
+            isnum = true;
+            num += power_10_lookup[numidx]*(c-'0');
+            numidx++;
+        } else {
+            std::string tmp;
+            tmp += c;
+            throw std::runtime_error(std::string("unknown token ") + tmp + " idx: " + std::to_string(i));
+            cur_token = &token_search;
+        }
+    }
+    if (isnum) {
+        num = reverseDigits(num);
+        if (first.type == None) {
+            first = {Immediate, num};
+        } else if (other.type == None) {
+            other = {Immediate, num};
+        } else {
+            throw std::runtime_error("To many values");
+        }
+    }
+    MathOperator ret;
+    if (first.type == Immediate && other.type == Immediate) {
+        ret.can_be_simpler = true;
+        switch (o)
+        {
+            case op_ADD:
+                ret.reg = first.val + other.val;
+                break;
+            case op_SUB:
+                ret.reg = first.val - other.val;
+                break;
+            case op_MUL:
+                ret.reg = first.val * other.val;
+                break;
+            case op_DIV:
+                ret.reg = first.val / other.val;
+                break;
+            case op_LSR:
+                ret.reg = first.val >> other.val;
+                break;
+            case op_LSL:
+                ret.reg = first.val << other.val;
+                break;
+            case op_AND:
+                ret.reg = first.val & other.val;
+                break;
+            case op_OR:
+                ret.reg = first.val | other.val;
+                break;
+            case op_XOR:
+                ret.reg = first.val ^ other.val;
+                break;
+            default:
+                throw std::runtime_error("Unknown operand think");
+                break;
+        }
+        return ret;
+    } else if (first.type == Register) {
+        ret.reg = first.val;
+        ret.other = other;
+        ret.operand = o;
+        ret.can_be_simpler = false;
+    } else if (first.type == Immediate) {
+        ret.reg = other.val;
+        ret.other = first;
+        if (o == op_DIV) {o = op_BDIV;} // reverse division. Operators are done (reg)(op)(other) so this makes 5/rax impossible cause we cannot do that. We made bdiv for that. That makes 5/rax -> rax(bdiv)5
+        if (o == op_SUB) {o = op_BSUB;} // reverse division. Operators are done (reg)(op)(other) so this makes 5/rax impossible cause we cannot do that. We made bdiv for that. That makes 5/rax -> rax(bdiv)5
+        if (o == op_LSL) {o = op_BLSL;} // reverse division. Operators are done (reg)(op)(other) so this makes 5/rax impossible cause we cannot do that. We made bdiv for that. That makes 5/rax -> rax(bdiv)5
+        if (o == op_LSR) {o = op_BLSR;} // reverse division. Operators are done (reg)(op)(other) so this makes 5/rax impossible cause we cannot do that. We made bdiv for that. That makes 5/rax -> rax(bdiv)5
+        ret.operand = o;
+        ret.can_be_simpler = false;
+    }
+    return ret;
 }
 
 int calculateOperandSize(std::string op) {
@@ -95,7 +290,13 @@ int calculateOperandSize(std::string op) {
     } else if (op2[0] == '#') {
         return 4;
     } else if (op2[0] == '[') {
-        std::list<MathOperatorToken> tokens = getMathOperatorTokens(op); 
+        MathOperator data = getMathOperatorTokens(op);
+        if (data.can_be_simpler) {return getmin(data.reg);}
+        if (data.other.type == Register) {
+            return 3; // reg, operand, reg
+        } else {
+            return 2 + getmin(data.other.val);
+        }
     } else {
         return getmin(std::stoi(op2));
     }
@@ -446,7 +647,8 @@ Opcode Compiler::getOpcode(const std::string& mnemonic) {
         {"COPY", COPY}, {"FILL", FILL}, {"CMP_MEM", CMP_MEM},
         {"MALLOC", MALLOC}, {"FREE", FREE},
         {"MNI", MNI},
-        {"IN", IN}
+        {"IN", IN},
+        {"MOVB", MOVB}
     };
     return opcodeMap.at(upperMnemonic);
 }
@@ -530,7 +732,8 @@ void Compiler::compile(const std::string& outputFile) {
                 ResolvedOperand resolved = resolveOperand(operand, instr.opcode);
                 if (debugMode) std::cout << "[Debug][Compiler]     Operand Type: 0x" << std::hex << static_cast<int>(resolved.type) << ", Value: " << std::dec << resolved.value << " (0x" << std::hex << resolved.value << std::dec << ")\n";
                 int value_size = calculateOperandSize(operand);
-                out.put(static_cast<char>(resolved.type) | (value_size << 4));
+
+                out.put(static_cast<char>(resolved.type) | ((value_size << 4) * -1 * resolved.size));
                 const char * value = reinterpret_cast<const char*>(&resolved.value);
                 for (int i=0; i<value_size; i++) {
                     out.put(value[i]);
@@ -599,7 +802,13 @@ ResolvedOperand Compiler::resolveOperand(const std::string& operand, Opcode cont
                 }
             } else if (operand.length() > 1 && toupper(operand[1]) == '[') { // square brackets like $[rax + 4]
                 std::string operand_short = operand.substr(2, operand.length()-3);
-                std::cout << operand_short << std::endl;
+                MathOperator data = getMathOperatorTokens(operand);
+                result.type = OperandType::MATH_OPERATOR;
+                if (data.can_be_simpler) {result.type = OperandType::DATA_ADDRESS; result.value = data.reg;} else {
+                result.value = data.reg + (data.operand << 8) + (data.other.val << 16);
+                if (data.other.type == Register) {
+                    result.size = 0;
+                }}
             } else {
                 bool isNumber = true;
                 std::string numStr = operand.substr(1);
@@ -612,7 +821,7 @@ ResolvedOperand Compiler::resolveOperand(const std::string& operand, Opcode cont
                         throw std::runtime_error("DATA_ADDRESS ($<number>) out of range: " + operand);
                     }
                     result.type = OperandType::DATA_ADDRESS;
-                    result.value = static_cast<int>(val);
+                    result.value = val;
                 } else {
                     // Try parsing as an immediate number (e.g., $500)
                     try {
@@ -621,7 +830,7 @@ ResolvedOperand Compiler::resolveOperand(const std::string& operand, Opcode cont
                             throw std::runtime_error("Immediate value ($) out of 32-bit range: " + operand);
                         }
                         result.type = OperandType::IMMEDIATE;
-                        result.value = static_cast<int>(val);
+                        result.value = val;
                     } catch (...) { // Catch invalid_argument, out_of_range
                         throw std::runtime_error("Invalid immediate value or undefined data/register label starting with $: " + operand);
                     }

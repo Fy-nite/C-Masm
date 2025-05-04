@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cstring>
 #include "common_defs.h"
+//#include "microasm_compiler.h"
 
 // --- Shared enums/types (should match interpreter/compiler) ---
 enum OperandType {
@@ -18,7 +19,8 @@ enum OperandType {
     IMMEDIATE = 0x02,
     LABEL_ADDRESS = 0x03,
     DATA_ADDRESS = 0x04,
-    REGISTER_AS_ADDRESS = 0x05
+    REGISTER_AS_ADDRESS = 0x05,
+    MATH_OPERATOR = 0x06,
 };
 
 const std::unordered_map<Opcode, std::string> opcodeToString = {
@@ -45,8 +47,8 @@ const std::unordered_map<int, std::string> registerIndexToString = {
     {20, "R12"}, {21, "R13"}, {22, "R14"}, {23, "R15"}
 };
 
-std::string formatOperand(OperandType type, int value) {
-    switch (type) {
+std::string formatOperand(OperandType type, long long value) {
+    switch (type & 0xf) {
         case REGISTER:
             if (registerIndexToString.count(value)) return registerIndexToString.at(value);
             return "R?" + std::to_string(value);
@@ -61,6 +63,79 @@ std::string formatOperand(OperandType type, int value) {
             return "$" + std::to_string(value);
         case NONE:
             return "[NONE]";
+        case MATH_OPERATOR: {
+            MathOperator data;
+            data.operand = (MathOperatorOperators)(value >> 8 & 0xFF);
+            data.reg = value & 0xFF;
+            data.other = {Immediate, (int)(value >> 16)};
+            if (type >> 4 == 1) data.other.type = Register;
+            // std::cout << std::to_string(data.operand) << std::endl;
+            // std::cout << std::to_string(type >> 4) << std::endl;
+            // std::cout << std::to_string(data.other.val) << std::endl;
+            std::string first = registerIndexToString.at(data.reg);
+            std::string second;
+            if (data.other.type == Register) second = registerIndexToString.at(data.other.val);
+            if (data.other.type == Immediate) second = std::to_string(data.other.val);
+            std::string operand;
+            std::string tmp = first;
+            switch (data.operand)
+            {
+                case op_ADD:
+                    operand = "+";
+                    break;
+                case op_SUB:
+                    operand = "-";
+                    break;
+                case op_MUL:
+                    operand = "*";
+                    break;
+                case op_DIV:
+                    operand = "/";
+                    break;
+                case op_BDIV:
+                    first = second;
+                    second = tmp;
+                    operand = "/";
+                    break; // backward div
+                case op_LSR:
+                    operand = ">>";
+                    break;
+                case op_LSL:
+                    operand = "<<";
+                    break;
+                case op_AND:
+                    operand = "&";
+                    break;
+                case op_OR:
+                    operand = "|";
+                    break;
+                case op_XOR:
+                    operand = "^";
+                    break;
+                case op_BSUB:
+                    first = second;
+                    second = tmp;
+                    operand = "-";
+                    break;
+                case op_BLSR:
+                    first = second;
+                    second = tmp;
+                    operand = ">>";
+                    break;
+                case op_BLSL:
+                    first = second;
+                    second = tmp;
+                    operand = "<<";
+                    break;
+                case op_NONE:
+                    operand = "ERR";
+                    break;
+                
+                default:
+                    break;
+            }
+            return "$[" + first + operand + second + "]";
+        }
         default:
             return "\t[UNKNOWN]";
     }
@@ -278,7 +353,7 @@ int decoder_main(int argc, char* argv[]) {
                  << (opcodeToString.count(opcode) ? opcodeToString.at(opcode) : ("0x" + std::to_string(opcodeByte)))
                  << CLR_RESET;
 
-            std::vector<std::pair<OperandType, int>> operands;
+            std::vector<std::pair<OperandType, long long>> operands;
             std::string mniFunc;
             size_t tempIp = ip;
             bool unknown = false;
@@ -305,11 +380,16 @@ int decoder_main(int argc, char* argv[]) {
                         if (tempIp + 1 + size > code.size())
                             throw std::runtime_error("Unexpected end of code segment while reading operand");
                         OperandType t = static_cast<OperandType>(code[tempIp++] & 0b1111);
-                        int             v =  (code[tempIp+(size-1)]);
-                        if (size >= 2) {v += (code[tempIp+(size-2)] << 8);}
-                        if (size >= 3) {v += (code[tempIp+(size-3)] << 16);}
-                        if (size == 4) {v += (code[tempIp] << 24);}
-                        if (size != 4) v = v & (1<<(8*(size)))-1;
+                        if (code[tempIp-1] == 6) t = (OperandType)(t + (1 << 4));
+
+                        long long       v =  (code[tempIp]);
+                        if (size >= 2) {v += (code[tempIp+1] << 8);}
+                        if (size >= 3) {v += (code[tempIp+2] << 16);}
+                        if (size >= 4) {v += (code[tempIp+3] << 24);}
+                        if (size >= 5) {v += ((long long)code[tempIp+4] << 32);}
+                        if (size == 6) {v += ((long long)code[tempIp+5] << 40);}
+
+                        //if (size != 4) v = v & (1<<(8*(size)))-1;
                         tempIp += size;
                         operands.emplace_back(t, v);
                         if (t == LABEL_ADDRESS) labels.push_back(v);
@@ -346,16 +426,16 @@ int decoder_main(int argc, char* argv[]) {
                 std::cout << CLR_OPCODE << "MNI" << CLR_RESET << " " << CLR_OPERAND << mniFunc << CLR_RESET;
                 std::string op_str = "MNI " + mniFunc;
                 for (auto& op : operands) {
-                    std::string operand = formatOperand(op.first, op.second);
+                    std::string operand;
                     if (op.first == LABEL_ADDRESS) {
                         if (header.dbgSize != 0) {
                             operand += " " + lbls.at(op.second);
                         } else
                             operand += " #" + std::to_string(op.second);
                     } else {
-                        operand += " " + formatOperand(op.first, op.second);;
+                        operand += " " + formatOperand(op.first, op.second);
                     }
-                    std::cout << " " << CLR_OPERAND << formatOperand(op.first, op.second) << CLR_RESET;
+                    std::cout << " " << CLR_OPERAND << operand << CLR_RESET;
                 }
                 instructions.push_back(op_str);
                 std::cout << std::endl;

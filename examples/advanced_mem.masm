@@ -1,3 +1,67 @@
+lbl print_stack
+    ; Setup Stack Frame
+    enter
+
+        ; top = RBP
+        ; top + 4 = ret address
+        ; RBP = RBP
+        ; RBP + 4 = ret address
+
+        mov rax RBP
+        cout 1 40
+        
+        lbl print_stack.loop
+
+            mov rbx $[rax+4]
+            out 1 RBX
+            cout 1 44
+            mov rax $rax
+
+        cmp rbx 0
+        jne #print_stack.loop
+
+        cout 1 41
+        cout 1 10
+
+    ; Exit stack frame
+    leave
+    ret
+
+lbl add
+    ; Setup Stack Frame
+    enter 20 ; extra 8 bytes cause thats what c does for some reason
+
+        mov $[rbp-4] rdi
+        mov $[rbp-8] rsi
+        add $[rbp-4] $[rbp-8]
+
+        call #print_stack
+
+        mov rax $[rbp-4]
+
+    ; Exit stack frame
+    leave
+    ret
+
 lbl main
-mov $[rax+10]
+mov rbp 0
+call #rmain
 hlt
+
+lbl rmain
+    ; Setup Stack Frame
+    enter
+
+        mov rdi 1 ; A
+        mov rsi 2 ; B
+        call #add
+        out 1 $100
+        out 1 RAX
+        cout 1 10
+
+    ; Exit stack frame
+    leave
+    ret
+
+; data:
+DB $100 "1 + 2 = "

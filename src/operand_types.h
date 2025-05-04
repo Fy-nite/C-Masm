@@ -10,7 +10,8 @@ enum class OperandType : uint8_t {
     IMMEDIATE = 0x02,  // Value is a direct integer literal
     LABEL_ADDRESS = 0x03, // Value is a code address (for JMP, CALL, etc.) - resolved by compiler
     DATA_ADDRESS = 0x04,  // Value is an offset/address in the data segment (e.g., from DB $1) - resolved by compiler
-    REGISTER_AS_ADDRESS = 0x05 // Register holding a memory address (e.g., $R1)
+    REGISTER_AS_ADDRESS = 0x05, // Register holding a memory address (e.g., $R1)
+    MATH_OPERATOR = 0x06 // Fancyness like $[rax+4]
 };
 
 #endif // OPERAND_TYPES_H
