@@ -120,17 +120,22 @@ int Interpreter::getOperandSize(char type) {
     return ret;
 }
 
-BytecodeOperand Interpreter::nextRawOperand() {
-    int size = getOperandSize(bytecode_raw[ip]);
-    if (ip + 1 + size >
+BytecodeOperand Interpreter::nextRawOperand(int ip_override) {
+    int _ip;
+    if (ip_override==-1)
+        _ip = ip;
+    else
+        _ip = ip_override;
+    int size = getOperandSize(bytecode_raw[_ip]);
+    if (_ip + 1 + size >
         bytecode_raw.size()) { // Check size for type byte + value int
         throw std::runtime_error(
             "Unexpected end of bytecode reading typed operand (IP: " +
-            std::to_string(ip) +
+            std::to_string(_ip) +
             ", CodeSize: " + std::to_string(bytecode_raw.size()) + ")");
     }
     BytecodeOperand operand;
-    operand.type = static_cast<OperandType>(bytecode_raw[ip++] & 15);
+    operand.type = static_cast<OperandType>(bytecode_raw[_ip++] & 15);
     // Handle NONE type immediately if needed (though it shouldn't be read here
     // usually)
     if (operand.type == OperandType::NONE) {
@@ -139,24 +144,30 @@ BytecodeOperand Interpreter::nextRawOperand() {
         // dummy value) Assuming it's just the type byte based on compiler code
         // for MNI marker
     } else {
-        if (bytecode_raw[ip-1] == 6) {
+        if (bytecode_raw[_ip-1] == 6) {
             operand.use_reg = true;
         }
-        if (ip + size > bytecode_raw.size()) {
+        if (_ip + size > bytecode_raw.size()) {
             throw std::runtime_error(
                 "Unexpected end of bytecode reading operand value (IP: " +
-                std::to_string(ip) + ")");
+                std::to_string(_ip) + ")");
         }
-                        operand.value =  (bytecode_raw[ip]);
-        if (size >= 2) {operand.value += (bytecode_raw[ip+1] << 8);}
-        if (size >= 3) {operand.value += (bytecode_raw[ip+2] << 16);}
-        if (size >= 4) {operand.value += (bytecode_raw[ip+3] << 24);}
-        if (size >= 5) {operand.value += ((long long)bytecode_raw[ip+4] << 32);}
-        if (size == 6) {operand.value += ((long long)bytecode_raw[ip+5] << 40);}
+                        operand.value =  (bytecode_raw[_ip]);
+        if (size >= 2) {operand.value += (bytecode_raw[_ip+1] << 8);}
+        if (size >= 3) {operand.value += (bytecode_raw[_ip+2] << 16);}
+        if (size >= 4) {operand.value += (bytecode_raw[_ip+3] << 24);}
+        if (size >= 5) {operand.value += ((long long)bytecode_raw[_ip+4] << 32);}
+        if (size == 6) {operand.value += ((long long)bytecode_raw[_ip+5] << 40);}
 
-        if (size != 4)
-            operand.value &= (1 << (8 * size)) - 1;
-        ip += size;
+        //operand.value &= ((long long)1 << (long long)(8 * size)) - 1;
+        _ip += size;
+    }
+    operand.ip_change = _ip-ip;
+    if (ip_override == -1) {
+        ip=_ip;
+        operand.ip_change = _ip-ip;
+    } else {
+        operand.ip_change = _ip-ip_override;
     }
     return operand;
 }
@@ -618,13 +629,209 @@ std::vector<int> breakpoints;
 
 std::string print_ip(int ip) {
     std::stringstream ss;
-    ss << "0x" << std::hex << ip;
+    ss << "0x" << std::setfill('0') << std::setw(8) << std::hex << ip << std::dec;
     if (lbls.size() > 0)
         ss << " (" << getAddr(ip, lbls) << ")";
     return ss.str();
 }
 
+void print_opcode(Opcode opcode) {
+    switch (opcode) { // Basic opcode names for debug
+        case MOV:
+            std::cout << "MOV";
+            break;
+        case MOVB:
+            std::cout << "MOVB";
+            break;
+        case ADD:
+            std::cout << "ADD";
+            break;
+        case SUB:
+            std::cout << "SUB";
+            break;
+        case MUL:
+            std::cout << "MUL";
+            break;
+        case DIV:
+            std::cout << "DIV";
+            break;
+        case INC:
+            std::cout << "INC";
+            break;
+        case JMP:
+            std::cout << "JMP";
+            break;
+        case CMP:
+            std::cout << "CMP";
+            break;
+        case JE:
+            std::cout << "JE";
+            break;
+        case JL:
+            std::cout << "JL";
+            break;
+        case CALL:
+            std::cout << "CALL";
+            break;
+        case RET:
+            std::cout << "RET";
+            break;
+        case PUSH:
+            std::cout << "PUSH";
+            break;
+        case POP:
+            std::cout << "POP";
+            break;
+        case OUT:
+            std::cout << "OUT";
+            break;
+        case COUT:
+            std::cout << "COUT";
+            break;
+        case OUTSTR:
+            std::cout << "OUTSTR";
+            break;
+        case OUTCHAR:
+            std::cout << "OUTCHAR";
+            break;
+        case HLT:
+            std::cout << "HLT";
+            break;
+        case ARGC:
+            std::cout << "ARGC";
+            break;
+        case GETARG:
+            std::cout << "GETARG";
+            break;
+        case DB:
+            std::cout << "DB";
+            break;
+        case LBL:
+            std::cout << "LBL";
+            break;
+        case AND:
+            std::cout << "AND";
+            break;
+        case OR:
+            std::cout << "OR";
+            break;
+        case XOR:
+            std::cout << "XOR";
+            break;
+        case NOT:
+            std::cout << "NOT";
+            break;
+        case SHL:
+            std::cout << "SHL";
+            break;
+        case SHR:
+            std::cout << "SHR";
+            break;
+        case MOVADDR:
+            std::cout << "MOVADDR";
+            break;
+        case MOVTO:
+            std::cout << "MOVTO";
+            break;
+        case JNE:
+            std::cout << "JNE";
+            break;
+        case JG:
+            std::cout << "JG";
+            break;
+        case JLE:
+            std::cout << "JLE";
+            break;
+        case JGE:
+            std::cout << "JGE";
+            break;
+        case ENTER:
+            std::cout << "ENTER";
+            break;
+        case LEAVE:
+            std::cout << "LEAVE";
+            break;
+        case COPY:
+            std::cout << "COPY";
+            break;
+        case FILL:
+            std::cout << "FILL";
+            break;
+        case CMP_MEM:
+            std::cout << "CMP_MEM";
+            break;
+        case MNI:
+            std::cout << "MNI";
+            break;
+        case IN:
+            std::cout << "IN";
+            break;
+        case MALLOC:
+            std::cout << "MALLOC";
+            break;
+        case FREE:
+            std::cout << "FREE";
+            break;
+        default:
+            std::cout << "???";
+            break;
+    }
+}
+
 std::stringstream dbg_output;
+
+int Interpreter::parse_ip(std::string lbl) {
+    if (lbl[0] == '#' && lbls.size() == 0)
+        std::cout << "Cannot use a label as a address without debug labels in file (run compiler with -g to include debug info)" << std::endl;
+    int addr = 0;
+    if (lbl.size() > 2 && lbl[1] == 'x') {
+        addr = std::stoi(lbl, nullptr, 16);
+    } else if (lbl[0] == '#') {
+        std::size_t pos = lbl.find('+');
+        if (pos != std::string::npos) {
+            addr = std::stoi(lbl.substr(pos+1));
+            lbl  = lbl.substr(0, pos);   
+        }
+        for (auto l : lbls) {
+            if (l.second == lbl) {
+                addr += l.first;
+                break;
+            }
+        }
+    } else {
+        addr = std::stoi(lbl);
+    }
+    return addr;
+}
+
+int getOperandCount_i(Opcode opcode) {
+    switch (opcode) {
+        case MOV: case MOVB: case ADD: case SUB: case MUL: case DIV: case CMP: case AND: case OR: case XOR: case SHL: case SHR:
+        case GETARG: case COPY: case FILL: case CMP_MEM: case OUT: case COUT: case OUTCHAR:
+            return 2;
+        case OUTSTR: case MOVTO: case MOVADDR:
+            return 3;
+        case INC: case JMP: case JE: case JL: case CALL: case PUSH: case POP: case JNE: case JG: case JLE: case JGE: case ENTER: case ARGC: case IN:
+            return 1;
+        case RET: case LEAVE: case HLT:
+            return 0;
+        case MALLOC: case FREE:
+            return 2;
+        case MNI:
+            return -1; // special
+        default:
+            return -2; // unknown
+    }
+}
+
+const std::unordered_map<int, std::string> registerIndexToString = {
+    {0, "RAX"}, {1, "RBX"}, {2, "RCX"}, {3, "RDX"},
+    {4, "RSI"}, {5, "RDI"}, {6, "RBP"}, {7, "RSP"},
+    {8, "R0"}, {9, "R1"}, {10, "R2"}, {11, "R3"},
+    {12, "R4"}, {13, "R5"}, {14, "R6"}, {15, "R7"},
+    {16, "R8"}, {17, "R9"}, {18, "R10"}, {19, "R11"},
+    {20, "R12"}, {21, "R13"}, {22, "R14"}, {23, "R15"}
+};
 
 void Interpreter::debugger(bool end) {
     if (std::find(breakpoints.begin(), breakpoints.end(), ip) != breakpoints.end()) {
@@ -670,27 +877,139 @@ void Interpreter::debugger(bool end) {
                 lbl = tokens[1];
             else
                 std::cout << "Missing addr" << std::endl;
-            if (lbl[0] == '#' && lbls.size() == 0)
-                std::cout << "Cannot use a label as a address without debug labels in file (run compiler with -g to include debug info)" << std::endl;
-            int addr;
-            if (lbl.size() > 2 && lbl[2] == 'x') {
-                addr = std::stoi(lbl, nullptr, 16);
-            } else if (lbl[0] == '#') {
-                for (auto l : lbls) {
-                    if (l.second == lbl) {
-                        addr = l.first;
-                        break;
-                    }
-                }
-            } else {
-                addr = std::stoi(lbl);
-            }
+            int addr = parse_ip(lbl);
             if (std::find(breakpoints.begin(), breakpoints.end(), addr) != breakpoints.end()) {
                 breakpoints.erase(std::remove(breakpoints.begin(), breakpoints.end(), addr), breakpoints.end());
                 std::cout << "Removed breakpoint at " << print_ip(addr) << std::endl;
             } else {
                 breakpoints.push_back(addr);
                 std::cout << "Put breakpoint at " << print_ip(addr) << std::endl;
+            }
+
+        } else if (cmd == "decompile" | cmd == "d") {
+            std::string lbl;
+            int addr = ip;
+            int size = 1;
+            if (tokens.size() > 1) {
+                addr = parse_ip(tokens[1]);
+            }
+            if (tokens.size() > 2) {
+                size = std::stoi(tokens[2]);
+            }
+            int old_addr = addr;
+            for (int asdf;asdf<size;asdf++) {
+                Opcode opcode = (Opcode)bytecode_raw[addr++];
+                std::cout << std::setw(40) << std::setfill(' ') << std::left << print_ip(addr-1) << " │ ";
+                print_opcode(opcode);
+                for (int i=0;i<getOperandCount_i(opcode);i++) {
+                    std::cout << " ";
+                    BytecodeOperand operand = nextRawOperand(addr);
+                    addr+=operand.ip_change;
+                    switch (operand.type)
+                    {
+                        case OperandType::IMMEDIATE:
+                            std::cout << std::to_string(operand.value);
+                            break;
+
+                        case OperandType::LABEL_ADDRESS:
+                            if (lbls.size() > 0)
+                                std::cout << lbls.at(operand.value);
+                            else
+                                std::cout << "#" << std::to_string(operand.value);
+                            break;
+                        
+                        case OperandType::DATA_ADDRESS:
+                            std::cout << "$" << std::to_string(operand.value);
+                            break;
+
+                        case OperandType::REGISTER:
+                            std::cout << registerIndexToString.at(operand.value);
+                            break;
+
+                        case OperandType::REGISTER_AS_ADDRESS:
+                            std::cout << "$" << registerIndexToString.at(operand.value);
+                            break;
+                        
+                        case OperandType::NONE:
+                            std::cout << "[NONE]";
+                            break;
+                        
+                        case OperandType::MATH_OPERATOR: {
+                            MathOperator data;
+                            data.operand = (MathOperatorOperators)(operand.value >> 8 & 0xFF);
+                            data.reg = operand.value & 0xFF;
+                            data.other = {Immediate, (int)(operand.value >> 16)};
+                            if (operand.use_reg) data.other.type = Register;
+                            std::string first = registerIndexToString.at(data.reg);
+                            std::string second;
+                            if (data.other.type == Register) second = registerIndexToString.at(data.other.val);
+                            if (data.other.type == Immediate) second = std::to_string(data.other.val);
+                            std::string math_operator;
+                            std::string tmp = first;
+                            switch (data.operand)
+                            {
+                                case op_ADD:
+                                math_operator = "+";
+                                    break;
+                                case op_SUB:
+                                    math_operator = "-";
+                                    break;
+                                case op_MUL:
+                                    math_operator = "*";
+                                    break;
+                                case op_DIV:
+                                    math_operator = "/";
+                                    break;
+                                case op_BDIV:
+                                    first = second;
+                                    second = tmp;
+                                    math_operator = "/";
+                                    break; // backward div
+                                case op_LSR:
+                                    math_operator = ">>";
+                                    break;
+                                case op_LSL:
+                                    math_operator = "<<";
+                                    break;
+                                case op_AND:
+                                    math_operator = "&";
+                                    break;
+                                case op_OR:
+                                    math_operator = "|";
+                                    break;
+                                case op_XOR:
+                                    math_operator = "^";
+                                    break;
+                                case op_BSUB:
+                                    first = second;
+                                    second = tmp;
+                                    math_operator = "-";
+                                    break;
+                                case op_BLSR:
+                                    first = second;
+                                    second = tmp;
+                                    math_operator = ">>";
+                                    break;
+                                case op_BLSL:
+                                    first = second;
+                                    second = tmp;
+                                    math_operator = "<<";
+                                    break;
+                                case op_NONE:
+                                    math_operator = "ERR";
+                                    break;
+                                
+                                default:
+                                    break;
+                            }
+                            std::cout << "$[" + first + math_operator + second + "]";
+                        }
+
+                        default:
+                            break;
+                    }
+                }
+                std::cout << std::endl;
             }
 
         } else if (cmd == "continue" | cmd == "c") {
@@ -719,6 +1038,8 @@ void Interpreter::debugger(bool end) {
             std::cout << "    b (addr) - aliases of breakpoint (addr)" << std::endl;
             std::cout << "    continue - run the program until the program exits" << std::endl;
             std::cout << "    c - aliases of continue" << std::endl;
+            std::cout << "    decompile <addr> <size> - decompile <size> instructions at current address or <addr> if givin" << std::endl;
+            std::cout << "    d - aliases of decompile <addr> <size>" << std::endl;
             std::cout << "    stdout - all text outputted so far from out and its variations" << std::endl;
             std::cout << "    status - status of the program" << std::endl;
             std::cout << "    addr - current address" << std::endl;
@@ -757,146 +1078,7 @@ void Interpreter::execute() {
             // You might want a helper function to convert Opcode enum to string
             // here
             std::cout << " (";
-            switch (opcode) { // Basic opcode names for debug
-            case MOV:
-                std::cout << "MOV";
-                break;
-            case MOVB:
-                std::cout << "MOVB";
-                break;
-            case ADD:
-                std::cout << "ADD";
-                break;
-            case SUB:
-                std::cout << "SUB";
-                break;
-            case MUL:
-                std::cout << "MUL";
-                break;
-            case DIV:
-                std::cout << "DIV";
-                break;
-            case INC:
-                std::cout << "INC";
-                break;
-            case JMP:
-                std::cout << "JMP";
-                break;
-            case CMP:
-                std::cout << "CMP";
-                break;
-            case JE:
-                std::cout << "JE";
-                break;
-            case JL:
-                std::cout << "JL";
-                break;
-            case CALL:
-                std::cout << "CALL";
-                break;
-            case RET:
-                std::cout << "RET";
-                break;
-            case PUSH:
-                std::cout << "PUSH";
-                break;
-            case POP:
-                std::cout << "POP";
-                break;
-            case OUT:
-                std::cout << "OUT";
-                break;
-            case COUT:
-                std::cout << "COUT";
-                break;
-            case OUTSTR:
-                std::cout << "OUTSTR";
-                break;
-            case OUTCHAR:
-                std::cout << "OUTCHAR";
-                break;
-            case HLT:
-                std::cout << "HLT";
-                break;
-            case ARGC:
-                std::cout << "ARGC";
-                break;
-            case GETARG:
-                std::cout << "GETARG";
-                break;
-            case DB:
-                std::cout << "DB";
-                break;
-            case LBL:
-                std::cout << "LBL";
-                break;
-            case AND:
-                std::cout << "AND";
-                break;
-            case OR:
-                std::cout << "OR";
-                break;
-            case XOR:
-                std::cout << "XOR";
-                break;
-            case NOT:
-                std::cout << "NOT";
-                break;
-            case SHL:
-                std::cout << "SHL";
-                break;
-            case SHR:
-                std::cout << "SHR";
-                break;
-            case MOVADDR:
-                std::cout << "MOVADDR";
-                break;
-            case MOVTO:
-                std::cout << "MOVTO";
-                break;
-            case JNE:
-                std::cout << "JNE";
-                break;
-            case JG:
-                std::cout << "JG";
-                break;
-            case JLE:
-                std::cout << "JLE";
-                break;
-            case JGE:
-                std::cout << "JGE";
-                break;
-            case ENTER:
-                std::cout << "ENTER";
-                break;
-            case LEAVE:
-                std::cout << "LEAVE";
-                break;
-            case COPY:
-                std::cout << "COPY";
-                break;
-            case FILL:
-                std::cout << "FILL";
-                break;
-            case CMP_MEM:
-                std::cout << "CMP_MEM";
-                break;
-            case MNI:
-                std::cout << "MNI";
-                break;
-            case IN:
-                std::cout << "IN";
-                break;
-            case MALLOC:
-                std::cout << "MALLOC";
-                break;
-            case FREE:
-                std::cout << "FREE";
-                break;
-            default:
-                std::cout << "???";
-                break;
-            }
+            print_opcode(opcode);
             std::cout << ")\n";
         }
 

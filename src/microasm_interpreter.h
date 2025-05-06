@@ -15,6 +15,7 @@ struct BytecodeOperand {
     OperandType type;
     long long value;
     bool use_reg = false; // used only for math_operator.
+    int ip_change = 0; // used by debugger
 };
 
 // Forward declaration
@@ -50,7 +51,7 @@ private: // Private members
     bool stackTrace = false;
 
     // Private methods
-    BytecodeOperand nextRawOperand();
+    BytecodeOperand nextRawOperand(int ip_override=-1);
     int getRegisterIndex(const BytecodeOperand& operand);
     void pushStack(int value);
     int popStack();
@@ -60,6 +61,7 @@ private: // Private members
     int getOperandSize(char type);
     void writeToOperand(BytecodeOperand op, int val, int size);
     int getRamAddr(BytecodeOperand op);
+    int parse_ip(std::string lbl);
     void debugger(bool end=false);
     void debugger_init();
 
