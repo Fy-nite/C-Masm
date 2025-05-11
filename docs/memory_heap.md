@@ -1,5 +1,6 @@
 # Masm heap
 The masm heap allows for allocating and freeing memory with `MALLOC (ptr) (size)` and `FREE (success) (ptr)`
+The masm heap uses all of memory except for the last 2 KiB for the stack (0-63488)
 
 ## MALLOC (ptr) (size)
 The malloc instruction allows for allocating (size) bytes in memory
@@ -13,7 +14,7 @@ The error codes are as following
 Name                  | value | description
 ----------------------|-------|----------------
 HEAP_ERR_OUT_OF_SPACE | -3    | Not enough space to allocate size bytes
-HEAP_ERR_INVALID_ARG  | -4    | Size = 0
+HEAP_ERR_INVALID_ARG  | -4    | Size was set to 0
 
 ## FREE (success) (ptr)
 The free instruction allows for freeing memory that has been previously allocated with MALLOC
@@ -31,6 +32,7 @@ HEAP_ERR_NOT_ALLOCATED | -2    | Tried to free data that has never been allocate
 lbl main
 MALLOC rax 15 ; allocate 14 bytes
 CMP rax 0 ; Err codes are negative
+MOV rcx 0
 jl #error
 
 MOVTO rax 0 72   ; H
@@ -52,11 +54,25 @@ MOVTO rax 14 0   ; null terminator
 out 1 $rax
 
 FREE rax rax ; Free the 15 bytes and set rax to zero (if free success else rax = the error code)
+CMP rax 0 ; Err codes are negative
+MOV rcx 0
+jl #error
 
 hlt
 
 lbl error
-DB $100 "Error while allocating memory: "
+DB $100 "Error while "
+DB $120 " memory: "
+DB $140 "allocating"
+DB $160 "freeing"
 out 1 $100
+cmp rcx 0
+jne #freeing
+out 1 $140
+jmp #end
+lbl #freeing
+out 1 $160
+lbl #end
 out 1 rax
 cout 1 10 ; \n
+hlt```
