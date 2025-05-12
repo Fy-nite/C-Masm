@@ -1,0 +1,11 @@
+#include "printf"
+lbl _start
+mov rbp 0
+
+
+
+call #main
+hlt
+
+lbl main
+ret

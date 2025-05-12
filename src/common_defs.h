@@ -62,6 +62,8 @@ enum Opcode {
     MALLOC,
     FREE,
     MOVB,
+    // syscall
+    SYSCALL,
     // Pseudo-instructions (handled during compilation, not runtime)
     INCLUDE = 0xF2, // Placeholder for include directive logic (handled pre-compilation)
 };

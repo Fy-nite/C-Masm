@@ -45,7 +45,7 @@ def car(prgm, output): #compile_and_run
             "name": f"compile {prgm}.masm",
             "type": "COMPILING",
             "id": -1,
-            "cmd": ["%masm%", "-c", f"%data%/{prgm}.masm", f"%tmp%/{prgm}.bin"],
+            "cmd": ["%masm%", "-c", f"%data%/{prgm}.masm", f"%tmp%/{prgm}.bin", "-g"],
             "depends": [0],
             "result": [
                 {

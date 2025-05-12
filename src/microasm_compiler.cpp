@@ -26,21 +26,14 @@
 #ifndef _WIN32
 #include <unistd.h>
 #endif
-// Filesystem includes
-#if __has_include(<filesystem>)
-    #include <filesystem>
-#elif __has_include(<experimental/filesystem>)
-    #include <experimental/filesystem>
-    namespace fs = std::experimental::filesystem;
-#else
-    #error "Neither <filesystem> nor <experimental/filesystem> is available."
-#endif
-#ifdef _WIN32
-namespace fs = std::experimental::filesystem;
-#endif
-#ifndef _WIN32
+
+// #include <filesystem> // C++17 standard header file name
+// #include <experimental/filesystem> // Header file for pre-standard implementation
+// using namespace std::experimental::filesystem::v1;
+// namespace fs = std::experimental::filesystem::v1;
+
+#include <filesystem>
 namespace fs = std::filesystem;
-#endif
 
 // Include own header FIRST
 #include "microasm_compiler.h"
@@ -359,7 +352,7 @@ std::string Compiler::resolveIncludePath(const std::string& includePath) {
         // Standard library include: relative to stdLibRoot, dots replaced by separators
         std::string stdPathStr = includePath;
         std::replace(stdPathStr.begin(), stdPathStr.end(), '.', static_cast<char>(fs::path::preferred_separator));
-        resolvedPath = fs::absolute(fs::path(stdLibRoot) / stdPathStr);
+        resolvedPath = fs::absolute(fs::path(stdLibRoot) / stdPathStr);   
     }
 
     // Check for existence with .mas and .masm extensions
@@ -383,6 +376,19 @@ std::string Compiler::resolveIncludePath(const std::string& includePath) {
         return cwdMas.string();
     }
     fs::path cwdMasm = cwd / pathObj;
+    cwdMasm.replace_extension(".masm");
+    if (fs::exists(cwdMasm) && fs::is_regular_file(cwdMasm)) {
+        return cwdMasm.string();
+    }
+
+    // --- Fallback: check next to file ---
+    fs::path cur_file = src_file;
+    fs::path cur_fileMas = cur_file / pathObj;
+    cwdMas.replace_extension(".mas");
+    if (fs::exists(cwdMas) && fs::is_regular_file(cwdMas)) {
+        return cwdMas.string();
+    }
+    fs::path cur_fileMasm = cur_file / pathObj;
     cwdMasm.replace_extension(".masm");
     if (fs::exists(cwdMasm) && fs::is_regular_file(cwdMasm)) {
         return cwdMasm.string();
@@ -488,6 +494,12 @@ void Compiler::parse(const std::string& source) {
     }
 }
 
+bool macro = false;
+std::string macro_name;
+std::vector<std::string> macro_args;
+std::vector<std::string> macro_instructions;
+std::unordered_map<std::string, std::pair<std::vector<std::string>, std::vector<std::string>>> macros;
+
 void Compiler::parseLine(const std::string& line, int lineNumber) {
     std::string trimmedLine = trim(line);
     if (trimmedLine.empty() || trimmedLine[0] == ';') return; // Skip comments and empty lines
@@ -531,6 +543,21 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
             if (label.empty()) throw std::runtime_error("Label name missing");
             labelMap["#" + label] = currentAddress; // Store labels with # prefix
             if (debugMode) std::cout << "[Debug][Compiler]   Defined label '" << label << "' at address " << currentAddress << "\n";
+        } else if (upperToken == "MACRO") {
+            stream >> macro_name;
+            std::string token;
+            macro_args = std::vector<std::string>();
+            macro_instructions = std::vector<std::string>();
+            while (std::getline(stream, token, ' ')) {
+                if (token.length()==0) {continue;} 
+                macro_args.push_back(token.substr(1, token.length()-2));
+            }
+            macro = true;
+            if (debugMode) std::cout << "[Debug][Compiler]   Parsed Macro: " << macro_name << "\n";
+        } else if (upperToken == "ENDMACRO") {
+            macro = false;
+            macros[macro_name] = std::make_pair(macro_instructions, macro_args);
+            if (debugMode) std::cout << "[Debug][Compiler]   Ended Macro: " << macro_name << "\n";
         } else if (upperToken == "DB") {
             // Simplified DB handling: Assume address is a label like $1, $2 etc.
             // and string follows. Compiler needs to manage this data.
@@ -555,30 +582,30 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
             // Handle escape sequences like \n (basic implementation)
             std::string processedValue;
             for (size_t i = 0; i < dataValue.length(); ++i) {
-            if (dataValue[i] == '\\' && i + 1 < dataValue.length()) {
-            switch (dataValue[i+1]) {
-            case 'n': processedValue += '\n'; i++; break;
-            case 't': processedValue += '\t'; i++; break;
-            case '\\': processedValue += '\\'; i++; break;
-            case '"': processedValue += '"'; i++; break;
-    
+                if (dataValue[i] == '\\' && i + 1 < dataValue.length()) {
+                    switch (dataValue[i+1]) {
+                        case 'n': processedValue += '\n'; i++; break;
+                        case 't': processedValue += '\t'; i++; break;
+                        case '\\': processedValue += '\\'; i++; break;
+                        case '"': processedValue += '"'; i++; break;
+            
                         default: processedValue += dataValue[i]; break; // Keep backslash if not a known escape
-                        }
-                        } else {
-                        processedValue += dataValue[i];
-                        }
-                        }
-                        std::string addr = dataLabel;
-                        addr.erase(0, 1);
-                        int addre = std::stoi(addr);
-                        int size = processedValue.length() + 1;
-                        dataSegment.push_back(addre & 0xFF);
-                        dataSegment.push_back(addre >> 8);
-                        dataSegment.push_back(size & 0xFF);
-                        dataSegment.push_back(size >> 8);
-                        for(char c : processedValue) {
-                        dataSegment.push_back(c);
-                        }
+                    }
+                } else {
+                    processedValue += dataValue[i];
+                }
+            }
+            std::string addr = dataLabel;
+            addr.erase(0, 1);
+            int addre = std::stoi(addr);
+            int size = processedValue.length() + 1;
+            dataSegment.push_back(addre & 0xFF);
+            dataSegment.push_back(addre >> 8);
+            dataSegment.push_back(size & 0xFF);
+            dataSegment.push_back(size >> 8);
+            for(char c : processedValue) {
+                dataSegment.push_back(c);
+            }
             dataSegment.push_back('\0'); // Null-terminate for convenience
             dataAddress += processedValue.length() + 1;
             if (debugMode) std::cout << "[Debug][Compiler]   Defined data label '" << dataLabel << " with value \"" << processedValue << "\"\n";
@@ -616,8 +643,24 @@ void Compiler::parseLine(const std::string& line, int lineNumber) {
                 }
                 instr.operands.push_back(operand);
             }
-            instructions.push_back(instr);
-            currentAddress += calculateInstructionSize(instr);
+            if (instr.opcode == -1) {
+                for (std::string i : macros[upperToken].first) {
+                    for (int arg_idx=0;arg_idx<macros[upperToken].second.size();arg_idx++) {
+                        std::string argument = "%" + macros[upperToken].second[arg_idx];
+                        size_t pos = 0;
+                        while ((pos = i.find(argument, pos)) != std::string::npos) {
+                            i.replace(pos, argument.length(), instr.operands[arg_idx]);
+                            pos += instr.operands[arg_idx].length(); // Move past the replaced part
+                        }
+                    }
+                    parseLine(i, lineNumber);
+                }
+            } else if (!macro) {
+                instructions.push_back(instr);
+                currentAddress += calculateInstructionSize(instr);
+            } else {
+                macro_instructions.push_back(line);
+            }
             if (debugMode) std::cout << "[Debug][Compiler]   Parsed instruction: " << upperToken
                                     << " with " << instr.operands.size() << " operands. New address: "
                                     << currentAddress << "\n";
@@ -645,11 +688,14 @@ Opcode Compiler::getOpcode(const std::string& mnemonic) {
         {"JNE", JNE}, {"JG", JG}, {"JLE", JLE}, {"JGE", JGE},
         {"ENTER", ENTER}, {"LEAVE", LEAVE},
         {"COPY", COPY}, {"FILL", FILL}, {"CMP_MEM", CMP_MEM},
-        {"MALLOC", MALLOC}, {"FREE", FREE},
         {"MNI", MNI},
         {"IN", IN},
-        {"MOVB", MOVB}
+        {"MOVB", MOVB},
+        {"SYSCALL", SYSCALL}
     };
+    if (!opcodeMap.count(upperMnemonic)) {
+        return (Opcode)-1;
+    }
     return opcodeMap.at(upperMnemonic);
 }
 
@@ -668,7 +714,10 @@ void Compiler::compile(const std::string& outputFile) {
     // --- Check for main label and set entry point ---
     uint32_t entryPointAddress = 0;
     std::string mainLabelName = "#main"; // The label name we expect
-    if (labelMap.count(mainLabelName)) {
+    std::string startLabelName = "#_start"; // The label name we expect
+    if (labelMap.count(startLabelName)) {
+        entryPointAddress = labelMap.at(startLabelName) | (1 << 31);
+    } else if (labelMap.count(mainLabelName)) {
         entryPointAddress = labelMap.at(mainLabelName);
     } else {
         throw std::runtime_error("Compilation failed: Entry point label '#main' not found.");
@@ -941,6 +990,7 @@ int microasm_compiler_main(int argc, char* argv[]) {
         fileStream.close();
 
         Compiler compiler;
+        compiler.src_file = sourceFile;
         compiler.setFlags(enableDebug, write_dbg_data); // Set debug mode
         compiler.parse(buffer.str());       // Parse content
         compiler.compile(outputFile);       // Compile to output

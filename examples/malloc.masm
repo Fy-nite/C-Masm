@@ -1,3 +1,20 @@
+MACRO MALLOC [STATUS] [SIZE]
+    mov RSI %SIZE
+    mov RAX 9 ; mmap
+    ;; ret in RAX
+    syscall
+    mov %STATUS rax
+ENDMACRO
+
+MACRO FREE [STATUS] [PTR]
+    mov RSI %PTR
+    mov RAX 11 ; munmap
+    ;; ret in RAX
+    syscall
+    mov %STATUS rax
+ENDMACRO
+
+
 lbl main
 MALLOC rax 15
 out 1 rax

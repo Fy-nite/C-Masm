@@ -15,6 +15,24 @@
 #include "heap.h"
 #include "microasm_compiler.h"
 #include "operand_types.h"
+
+#ifdef __linux__
+    #include <sys/types.h>
+    #include <sys/stat.h>
+    #include <fcntl.h>
+    #include <unistd.h>
+    #include <time.h>
+#else
+    #include <io.h>
+    #define read _read
+    #define write _write
+    #define open _open
+    #define close _close
+    #define fstat _fstat
+    #define nanosleep _nanosleep
+    #define stat _stat64i32
+#endif
+
 std::vector<std::string> mniCallStack;
 #define VERSION 2
 // Include own header FIRST
@@ -81,21 +99,21 @@ void registerMNI(const std::string &module, const std::string &name,
     }
 }
 
+void Interpreter::initialize() {
+    registers[6] = 0;
+    bp = registers[6];
+}
+
 // --- Interpreter Method Definitions ---
 
 Interpreter::Interpreter(int ramSize, const std::vector<std::string> &args,
                          bool debug, bool trace)
     : registers(24, 0), ram(ramSize, 0), cmdArgs(args), debugMode(debug),
       stackTrace(trace) {
-    // Initialize Stack Pointer (RSP, index 7) to top of RAM
+    init = true;
+
     registers[7] = ramSize;
     sp = registers[7];
-    // Base Pointer (RBP, index 6) is initalized to zero. Normal this will be
-    // set to junk but we can set it to zero.
-    registers[6] = 0;
-    bp = registers[6];
-    // Set data segment base - let's put it in the middle for now
-    // Ensure this doesn't collide with stack growing down!
 
     // Initialize MNI functions
     initializeMNIFunctions();
@@ -557,6 +575,8 @@ void Interpreter::load(const std::string &bytecodeFile) {
     }
 
     // 5. Set Instruction Pointer to Entry Point
+    init = (header.entryPoint & (1<<31)) != 0;
+    header.entryPoint = header.entryPoint & (int)((unsigned int)(1<<31)-1);
     if (header.entryPoint >= header.codeSize &&
         header.codeSize > 0) { // Allow entryPoint 0 for empty code
         throw std::runtime_error("Entry point (" +
@@ -565,6 +585,9 @@ void Interpreter::load(const std::string &bytecodeFile) {
                                  std::to_string(header.codeSize) + ")");
     }
     ip = header.entryPoint;
+    if (init) {
+        initialize();
+    }
 
     if (debugMode) {
         std::cout << "[Debug][Interpreter] Loading bytecode from: "
@@ -1050,7 +1073,7 @@ void Interpreter::debugger(bool end) {
     }
 }
 
-void Interpreter::execute() {
+int Interpreter::execute() {
     // Reset flags before execution? Or assume they persist? Assume reset for
     // now.
     zeroFlag = false;
@@ -1062,6 +1085,7 @@ void Interpreter::execute() {
     bp = registers[6];
 
     bool exit = false;
+    int exit_code = 0;
     if (debugMode) debugger_init();
     while (ip < bytecode_raw.size() && !exit) {
         if (debugMode) debugger();
@@ -1804,6 +1828,75 @@ void Interpreter::execute() {
                 break;
             }
 
+            case SYSCALL: {
+                int syscall = registers[0];
+                if (debugMode) std::cout << "[Debug][Interpreter]   Syscall: " << std::to_string(syscall) << std::endl;
+                switch (syscall)
+                {
+                    case 0: {
+                        int fd = registers[5];
+                        int ptr = registers[4];
+                        int count = registers[3];
+                        registers[0] = read(fd, ram.data()+ptr, count);
+                    }
+                    case 1: {
+                        int fd = registers[5];
+                        int ptr = registers[4];
+                        int count = registers[3];
+                        registers[0] = write(fd, ram.data()+ptr, count);
+                    }
+                    case 2: {
+                        int name = registers[5];
+                        int flags = registers[4];
+                        int mode = registers[3];
+                        registers[0] = open(ram.data()+name, flags, mode);
+                    }
+                    case 3: {
+                        int fd = registers[5];
+                        registers[0] = close(fd);
+                    }
+                    case 5: {
+                        int fd = registers[5];
+                        int ptr = registers[4];
+                        registers[0] = fstat(fd, (struct stat*)ram.data()+ptr);
+                    }
+                    case 9: {
+                        int size = registers[5];
+                        registers[0] = mmalloc(size);
+                        break;
+                    }
+                    case 11: {
+                        int ptr = registers[5];
+                        registers[0] = mfree(ptr);
+                        break;
+                    }
+                    case 35: {
+                        #ifdef __linux__
+                            int timespec_ptr = registers[5];
+                            int remainder_ptr = registers[4];
+                            registers[0] = nanosleep((timespec*)ram.data()+timespec_ptr, (timespec*)ram.data()+remainder_ptr);
+                            break;
+                        #else
+                            std::cout << "Nanosleep is not implemented on windows\n" << std::endl;
+                            exit = true;
+                        #endif
+                    }
+                    case 60: {
+                        exit = true;
+                        exit_code = registers[5];
+                    }
+                    case 201: {
+                        registers[0] = time((time_t*)ram.data()+registers[5]);
+                    }
+                    
+                    default:
+                        throw std::runtime_error("Unimplemented or unknown opcode encountered during execution: 0x" +
+                        std::to_string(syscall));
+                        break;
+                }
+                break;
+            }
+
             default:
                 throw std::runtime_error("Unimplemented or unknown opcode "
                                          "encountered during execution: 0x" +
@@ -1947,6 +2040,7 @@ void Interpreter::execute() {
     }
     check_unfreed_memory(); // cleanup memory and print unfreed memory
     if (debugMode) debugger(true); // Allow for some last minute commands
+    return exit_code;
 }
 
 static std::vector<std::string> mniCallStackInternal;
@@ -2014,10 +2108,11 @@ int microasm_interpreter_main(int argc, char *argv[]) {
         Interpreter interpreter(65536, programArgs, enableDebug,
                                 stackTrace); // Pass debug flag
         interpreter.load(bytecodeFile);
-        interpreter.execute();
+        int a = interpreter.execute();
 
         std::cout << "Execution finished successfully!"
                   << std::endl; // HLT used to provide its own message
+        return a;
     } catch (const std::exception &e) {
         // Error already logged in execute() or load()
         std::cerr << "Execution failed: " << e.what() << std::endl;

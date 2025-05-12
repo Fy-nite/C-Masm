@@ -59,6 +59,7 @@ class Compiler {
     void parseLine(const std::string& line, int lineNumber); // Updated to accept lineNumber
 
 public:
+    std::string src_file;
     void setFlags(bool debug=false, bool write_dbg=false);
     void parse(const std::string& source);
     void compile(const std::string& outputFile);

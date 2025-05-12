@@ -49,6 +49,7 @@ private: // Private members
     std::vector<std::string> cmdArgs;
     bool debugMode = false;
     bool stackTrace = false;
+    bool init;
 
     // Private methods
     BytecodeOperand nextRawOperand(int ip_override=-1);
@@ -64,6 +65,7 @@ private: // Private members
     int parse_ip(std::string lbl);
     void debugger(bool end=false);
     void debugger_init();
+    void initialize();
 
 public: // Public methods including memory access for C API
     // Constructor
@@ -83,7 +85,7 @@ public: // Public methods including memory access for C API
 
     // Main operations (already public)
     void load(const std::string& bytecodeFile);
-    void execute();
+    int execute();
 
     // Public helper needed by MNI and internal logic (already public)
     int getValue(const BytecodeOperand& operand, int size);

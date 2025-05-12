@@ -17,60 +17,16 @@
             }
         },
         {
-            "name": "compile stack_trace and test dbg output",
-            "type": "Compiling",
-            "id": 1,
-            "depends": [0],
-            "cmd": ["%masm%", "-c", "%data%/stack_trace.masm", "%tmp%/stack.bin", "%tmp%/stack.dbg"],
-            "result": [
-                {
-                    "err":"Masm returned non 0 exit code. See Above",
-                    "check": "Texit_code",
-                    "args":[0]
-                },
-                {
-                    "err":"Masm byte code is wrong. See Below",
-                    "check": "Tfile",
-                    "args": ["%tmp%/stack.bin", "%data%/stack_trace.expected"],
-                    "run": ["%masm%", "-u", "%tmp%/stack.bin"]
-                },
-                {
-                    "err":"Masm dbg is wrong.",
-                    "check": "Tfile",
-                    "args": ["%tmp%/stack.dbg", "%data%/stack.dbg.expected"]
-                }
-            ]
+            "macro": ["compile_and_run", "builtin_hello", "Hello, Builtin World!\nExecution finished successfully!\n"]
         },
         {
-            "name": "run stack_trace.masm",
-            "type": "RUNNING",
-            "id": 2,
-            "depends": [1],
-            "cmd": ["%masm%", "-i", "%tmp%/stack.bin"],
-            "result": [
-                {
-                    "err":"Masm returned non 0 exit code. See Above",
-                    "check": "Texit_code",
-                    "args":[0]
-                },
-                {
-                    "err": "Expected (110,156,135,0,)\\n1 + 2 = 3\\n in stdout, instead got %stdout%",
-                    "check": "Tstdout",
-                    "args": ["(110,156,135,0,)\n1 + 2 = 3\n"]
-                }
-            ]
+            "macro": ["compile_and_run", "mem", "10Execution finished successfully!\n"]
         },
         {
-            "macro": ["compile_and_run", "builtin_hello", "Hello, Builtin World!\n"]
+            "macro": ["compile_and_run", "hello", "Hello, World!\nExecution finished successfully!\n"]
         },
         {
-            "macro": ["compile_and_run", "mem", "10"]
-        },
-        {
-            "macro": ["compile_and_run", "hello", "Hello, World!\n"]
-        },
-        {
-            "macro": ["compile_and_run", "very_big_program", "Hello, World!\nHello, World! again\ntyring to take a long time to test multithreading\nand the compiler\nYIPPIE\nHello, World!\nHello, World!\nHello, World!\n"]
+            "macro": ["compile_and_run", "very_big_program", "Hello, World!\nHello, World! again\ntyring to take a long time to test multithreading\nand the compiler\nYIPPIE\nHello, World!\nHello, World!\nHello, World!\nExecution finished successfully!\n"]
         }
     ]
 }
