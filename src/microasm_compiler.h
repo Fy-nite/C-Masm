@@ -65,7 +65,13 @@ public:
     void compile(const std::string& outputFile);
 };
 
+
 // Declare the standalone main function for the compiler
-int microasm_compiler_main(int argc, char* argv[]);
+extern "C" int microasm_compiler_main(int argc, char* argv[]);
+
+// declare to c
+
+    // C API for the compiler
+    extern "C" int microasm_compiler_main_c(int argc, char* argv[]);
 
 #endif // MICROASM_COMPILER_H

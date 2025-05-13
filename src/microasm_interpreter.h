@@ -103,6 +103,7 @@ public: // Public methods including memory access for C API
     // Execute a single instruction (must be implemented)
     void executeStep();
 };
+extern "C" int microasm_interpreter_main_c(int argc, char* argv[]);
 
 // Declare the standalone main function for the interpreter
 int microasm_interpreter_main(int argc, char* argv[]);

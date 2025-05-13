@@ -36,14 +36,13 @@ add_executable(masm src/main.cpp)
 target_link_libraries(masm microasm_static)
 
 
-# Install targets
-install(TARGETS microasm_static microasm_shared masm
-                ARCHIVE DESTINATION lib
-                LIBRARY DESTINATION lib
-                RUNTIME DESTINATION bin)
+install(TARGETS microasm_static microasm_shared
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-install(FILES  src/debug_macros.h src/microasm_compiler.h src/operand_types.h src/common_defs.h src/debug_macros.h
-                DESTINATION include/microasm)
+install(FILES src/microasm_compiler.h src/microasm_interpreter.h src/operand_types.h src/common_defs.h src/debug_macros.h
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/microasm)
 
 # Print status message
 message(STATUS "Configured MicroASM Toolchain build with static and shared libraries.")
