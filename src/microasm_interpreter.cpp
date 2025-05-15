@@ -16,7 +16,7 @@
 #include "microasm_compiler.h"
 #include "operand_types.h"
 
-#ifdef __linux__
+#ifndef __linux__ || __APPLE__ || __MACH__
     #include <sys/types.h>
     #include <sys/stat.h>
     #include <fcntl.h>
@@ -1833,27 +1833,50 @@ int Interpreter::execute() {
                 if (debugMode) std::cout << "[Debug][Interpreter]   Syscall: " << std::to_string(syscall) << std::endl;
                 switch (syscall)
                 {
-                    case 0: {
+                    case 0: { // Read
                         int fd = registers[5];
                         int ptr = registers[4];
                         int count = registers[3];
-                        registers[0] = _read(fd, ram.data()+ptr, count);
+                        std::ifstream file(std::to_string(fd), std::ios::binary);
+                        if (!file) {
+                            registers[0] = -1; // Error
+                        } else {
+                            file.read(reinterpret_cast<char *>(ram.data() + ptr), count);
+                            registers[0] = file.gcount(); // Number of bytes read
+                        }
+                        break;
                     }
-                    case 1: {
+                    case 1: { // Write
                         int fd = registers[5];
                         int ptr = registers[4];
                         int count = registers[3];
-                        registers[0] = _write(fd, ram.data()+ptr, count);
+                        std::ofstream file(std::to_string(fd), std::ios::binary | std::ios::app);
+                        if (!file) {
+                            registers[0] = -1; // Error
+                        } else {
+                            file.write(reinterpret_cast<const char *>(ram.data() + ptr), count);
+                            registers[0] = count; // Assume all bytes written
+                        }
+                        break;
                     }
-                    case 2: {
+                    case 2: { // Open
                         int name = registers[5];
-                        int flags = registers[4];
-                        int mode = registers[3];
-                        registers[0] = _open(ram.data()+name, flags, mode);
+                        int flags = registers[4]; // Ignored for simplicity
+                        int mode = registers[3];  // Ignored for simplicity
+                        std::string filename(reinterpret_cast<char *>(ram.data() + name));
+                        std::fstream file(filename, std::ios::binary | std::ios::in | std::ios::out);
+                        if (!file) {
+                            registers[0] = -1; // Error
+                        } else {
+                            registers[0] = std::hash<std::string>{}(filename); // Use hash as a pseudo file descriptor
+                        }
+                        break;
                     }
-                    case 3: {
+                    case 3: { // Close
                         int fd = registers[5];
-                        registers[0] = _close(fd);
+                        // No explicit close needed for std::fstream; simulate success
+                        registers[0] = 0;
+                        break;
                     }
                     case 5: {
                         int fd = registers[5];
