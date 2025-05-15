@@ -16,7 +16,7 @@ enum Opcode {
     RET = 0x0B,
     PUSH = 0x0C,
     POP = 0x0D,
-    OUT = 0x0E,
+    OP_OUT = 0x0E,
     COUT = 0x0F,
     OUTSTR = 0x10,
     OUTCHAR = 0x11,
@@ -43,7 +43,7 @@ enum Opcode {
     FILL = 0x26,
     CMP_MEM = 0x27,
     MNI = 0x28,
-    IN = 0x29
+    OP_IN = 0x29
 };
 
 #pragma pack(push, 1)

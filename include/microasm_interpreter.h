@@ -323,7 +323,7 @@ void Interpreter::execute() {
                 case JE: std::cout << "JE"; break; case JL: std::cout << "JL"; break;
                 case CALL: std::cout << "CALL"; break; case RET: std::cout << "RET"; break;
                 case PUSH: std::cout << "PUSH"; break; case POP: std::cout << "POP"; break;
-                case OUT: std::cout << "OUT"; break; case COUT: std::cout << "COUT"; break;
+                case OP_OUT: std::cout << "OUT"; break; case COUT: std::cout << "COUT"; break;
                 case OUTSTR: std::cout << "OUTSTR"; break; case OUTCHAR: std::cout << "OUTCHAR"; break;
                 case HLT: std::cout << "HLT"; break; case ARGC: std::cout << "ARGC"; break;
                 case GETARG: std::cout << "GETARG"; break; case DB: std::cout << "DB"; break;
@@ -476,7 +476,7 @@ void Interpreter::execute() {
                 }
 
                 // I/O Operations
-                case OUT: {
+                case OP_OUT: {
                     BytecodeOperand op_port = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op1(Port): " << formatOperandDebug(op_port) << "\n";
                     BytecodeOperand op_val = nextRawOperand(); if(debugMode) std::cout << "[Debug][Interpreter]   Op2(Val ): " << formatOperandDebug(op_val) << "\n";
                     int port = getValue(op_port); // Port can be immediate or register

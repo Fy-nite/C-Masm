@@ -16,7 +16,7 @@
 #include "microasm_compiler.h"
 #include "operand_types.h"
 
-#ifdef __linux__
+#ifndef __linux__
     #include <sys/types.h>
     #include <sys/stat.h>
     #include <fcntl.h>
@@ -698,7 +698,7 @@ void print_opcode(Opcode opcode) {
         case POP:
             std::cout << "POP";
             break;
-        case OUT:
+        case OP_OUT:
             std::cout << "OUT";
             break;
         case COUT:
@@ -779,7 +779,7 @@ void print_opcode(Opcode opcode) {
         case MNI:
             std::cout << "MNI";
             break;
-        case IN:
+        case OP_IN:
             std::cout << "IN";
             break;
         case MALLOC:
@@ -823,11 +823,11 @@ int Interpreter::parse_ip(std::string lbl) {
 int getOperandCount_i(Opcode opcode) {
     switch (opcode) {
         case MOV: case MOVB: case ADD: case SUB: case MUL: case DIV: case CMP: case AND: case OR: case XOR: case SHL: case SHR:
-        case GETARG: case COPY: case FILL: case CMP_MEM: case OUT: case COUT: case OUTCHAR:
+        case GETARG: case COPY: case FILL: case CMP_MEM: case OP_OUT: case COUT: case OUTCHAR:
             return 2;
         case OUTSTR: case MOVTO: case MOVADDR:
             return 3;
-        case INC: case JMP: case JE: case JL: case CALL: case PUSH: case POP: case JNE: case JG: case JLE: case JGE: case ENTER: case ARGC: case IN:
+        case INC: case JMP: case JE: case JL: case CALL: case PUSH: case POP: case JNE: case JG: case JLE: case JGE: case ENTER: case ARGC: case OP_IN:
             return 1;
         case RET: case LEAVE: case HLT:
             return 0;
@@ -1343,7 +1343,7 @@ int Interpreter::execute() {
             }
 
             // I/O Operations
-            case OUT: {
+            case OP_OUT: {
                 BytecodeOperand op_port = nextRawOperand();
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op1(Port): "
@@ -1474,7 +1474,7 @@ int Interpreter::execute() {
                 // No automatic newline for OUTCHAR
                 break;
             }
-            case IN: {
+            case OP_IN: {
                 BytecodeOperand op_dest = nextRawOperand();
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op1(Dest): "
@@ -1836,7 +1836,7 @@ int Interpreter::execute() {
                         int count = registers[3];
                         registers[0] = read(fd, ram.data()+ptr, count);
                     }
-                    case 1: {
+                    case 1: { // Write
                         int fd = registers[5];
                         int ptr = registers[4];
                         int count = registers[3];
@@ -1885,11 +1885,6 @@ int Interpreter::execute() {
                     case 201: {
                         registers[0] = time((time_t*)ram.data()+registers[5]);
                     }
-                    
-                    default:
-                        throw std::runtime_error("Unimplemented or unknown opcode encountered during execution: 0x" +
-                        std::to_string(syscall));
-                        break;
                     
                     #undef read
                     #undef write
