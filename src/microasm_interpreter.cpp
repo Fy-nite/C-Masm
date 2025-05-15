@@ -24,13 +24,13 @@
     #include <time.h>
 #else
     #include <io.h>
-    #define read _read
-    #define write _write
-    #define open _open
-    #define close _close
-    #define fstat _fstat
-    #define nanosleep _nanosleep
-    #define stat _stat64i32
+    //#define read _read
+    //#define write _write
+    //#define open _open
+    //#define close _close
+    //#define fstat _fstat
+    //#define nanosleep _nanosleep
+    //#define stat _stat64i32
 #endif
 
 std::vector<std::string> mniCallStack;
@@ -705,7 +705,7 @@ void print_opcode(Opcode opcode) {
         case POP:
             std::cout << "POP";
             break;
-        case OUT:
+        case OP_OUT:
             std::cout << "OUT";
             break;
         case COUT:
@@ -786,7 +786,7 @@ void print_opcode(Opcode opcode) {
         case MNI:
             std::cout << "MNI";
             break;
-        case IN:
+        case OP_IN:
             std::cout << "IN";
             break;
         case MALLOC:
@@ -830,11 +830,11 @@ int Interpreter::parse_ip(std::string lbl) {
 int getOperandCount_i(Opcode opcode) {
     switch (opcode) {
         case MOV: case MOVB: case ADD: case SUB: case MUL: case DIV: case CMP: case AND: case OR: case XOR: case SHL: case SHR:
-        case GETARG: case COPY: case FILL: case CMP_MEM: case OUT: case COUT: case OUTCHAR:
+        case GETARG: case COPY: case FILL: case CMP_MEM: case OP_OUT: case COUT: case OUTCHAR:
             return 2;
         case OUTSTR: case MOVTO: case MOVADDR:
             return 3;
-        case INC: case JMP: case JE: case JL: case CALL: case PUSH: case POP: case JNE: case JG: case JLE: case JGE: case ENTER: case ARGC: case IN:
+        case INC: case JMP: case JE: case JL: case CALL: case PUSH: case POP: case JNE: case JG: case JLE: case JGE: case ENTER: case ARGC: case OP_IN:
             return 1;
         case RET: case LEAVE: case HLT:
             return 0;
@@ -1350,7 +1350,7 @@ int Interpreter::execute() {
             }
 
             // I/O Operations
-            case OUT: {
+            case OP_OUT: {
                 BytecodeOperand op_port = nextRawOperand();
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op1(Port): "
@@ -1481,7 +1481,7 @@ int Interpreter::execute() {
                 // No automatic newline for OUTCHAR
                 break;
             }
-            case IN: {
+            case OP_IN: {
                 BytecodeOperand op_dest = nextRawOperand();
                 if (debugMode)
                     std::cout << "[Debug][Interpreter]   Op1(Dest): "
@@ -1837,23 +1837,23 @@ int Interpreter::execute() {
                         int fd = registers[5];
                         int ptr = registers[4];
                         int count = registers[3];
-                        registers[0] = read(fd, ram.data()+ptr, count);
+                        registers[0] = _read(fd, ram.data()+ptr, count);
                     }
                     case 1: {
                         int fd = registers[5];
                         int ptr = registers[4];
                         int count = registers[3];
-                        registers[0] = write(fd, ram.data()+ptr, count);
+                        registers[0] = _write(fd, ram.data()+ptr, count);
                     }
                     case 2: {
                         int name = registers[5];
                         int flags = registers[4];
                         int mode = registers[3];
-                        registers[0] = open(ram.data()+name, flags, mode);
+                        registers[0] = _open(ram.data()+name, flags, mode);
                     }
                     case 3: {
                         int fd = registers[5];
-                        registers[0] = close(fd);
+                        registers[0] = _close(fd);
                     }
                     case 5: {
                         int fd = registers[5];

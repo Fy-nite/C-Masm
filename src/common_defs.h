@@ -38,7 +38,7 @@ enum Opcode {
     // Stack
     PUSH, POP,
     // I/O
-    OUT, COUT, OUTSTR, OUTCHAR,
+    OP_OUT, COUT, OUTSTR, OUTCHAR,
     // Program Control
     HLT, ARGC, GETARG,
     // Data Definition
@@ -57,7 +57,7 @@ enum Opcode {
     COPY, FILL, CMP_MEM,
     // Module Native Interface call
     MNI,
-    IN,
+    OP_IN,
     // Heap
     MALLOC,
     FREE,
@@ -65,7 +65,7 @@ enum Opcode {
     // syscall
     SYSCALL,
     // Pseudo-instructions (handled during compilation, not runtime)
-    INCLUDE = 0xF2, // Placeholder for include directive logic (handled pre-compilation)
+    INCLUDE = 0xF2 // Placeholder for include directive logic (handled pre-compilation)
 };
 
 enum MathOperatorTokenType {

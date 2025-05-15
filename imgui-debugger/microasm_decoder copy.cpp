@@ -111,7 +111,7 @@ enum Opcode {
     // Stack
     PUSH, POP,
     // I/O
-    OUT, COUT, OUTSTR, OUTCHAR,
+    OP_OUT, COUT, OUTSTR, OUTCHAR,
     // Program Control
     HLT, ARGC, GETARG,
     // Data Definition (Not present in code segment)
@@ -136,7 +136,7 @@ const std::unordered_map<Opcode, std::string> opcodeToString = {
     {MOV, "MOV"}, {ADD, "ADD"}, {SUB, "SUB"}, {MUL, "MUL"}, {DIV, "DIV"}, {INC, "INC"},
     {JMP, "JMP"}, {CMP, "CMP"}, {JE, "JE"}, {JL, "JL"}, {CALL, "CALL"}, {RET, "RET"},
     {PUSH, "PUSH"}, {POP, "POP"},
-    {OUT, "OUT"}, {COUT, "COUT"}, {OUTSTR, "OUTSTR"}, {OUTCHAR, "OUTCHAR"},
+    {OP_OUT, "OUT"}, {COUT, "COUT"}, {OUTSTR, "OUTSTR"}, {OUTCHAR, "OUTCHAR"},
     {HLT, "HLT"}, {ARGC, "ARGC"}, {GETARG, "GETARG"},
     {AND, "AND"}, {OR, "OR"}, {XOR, "XOR"}, {NOT, "NOT"}, {SHL, "SHL"}, {SHR, "SHR"},
     {MOVADDR, "MOVADDR"}, {MOVTO, "MOVTO"},
@@ -151,7 +151,7 @@ const std::unordered_map<Opcode, int> opcodeOperandCount = {
     {MOV, 2}, {ADD, 2}, {SUB, 2}, {MUL, 2}, {DIV, 2}, {INC, 1},
     {JMP, 1}, {CMP, 2}, {JE, 1}, {JL, 1}, {CALL, 1}, {RET, 0},
     {PUSH, 1}, {POP, 1},
-    {OUT, 2}, {COUT, 2}, {OUTSTR, 3}, {OUTCHAR, 2},
+    {OP_OUT, 2}, {COUT, 2}, {OUTSTR, 3}, {OUTCHAR, 2},
     {HLT, 0}, {ARGC, 1}, {GETARG, 2},
     {AND, 2}, {OR, 2}, {XOR, 2}, {NOT, 1}, {SHL, 2}, {SHR, 2},
     {MOVADDR, 3}, {MOVTO, 3},

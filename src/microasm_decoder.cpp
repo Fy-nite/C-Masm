@@ -27,14 +27,14 @@ const std::unordered_map<Opcode, std::string> opcodeToString = {
     {MOV, "MOV"}, {ADD, "ADD"}, {SUB, "SUB"}, {MUL, "MUL"}, {DIV, "DIV"}, {INC, "INC"},
     {JMP, "JMP"}, {CMP, "CMP"}, {JE, "JE"}, {JL, "JL"}, {CALL, "CALL"}, {RET, "RET"},
     {PUSH, "PUSH"}, {POP, "POP"},
-    {OUT, "OUT"}, {COUT, "COUT"}, {OUTSTR, "OUTSTR"}, {OUTCHAR, "OUTCHAR"},
+    {OP_OUT, "OUT"}, {COUT, "COUT"}, {OUTSTR, "OUTSTR"}, {OUTCHAR, "OUTCHAR"},
     {HLT, "HLT"}, {ARGC, "ARGC"}, {GETARG, "GETARG"},
     {AND, "AND"}, {OR, "OR"}, {XOR, "XOR"}, {NOT, "NOT"}, {SHL, "SHL"}, {SHR, "SHR"},
     {MOVADDR, "MOVADDR"}, {MOVTO, "MOVTO"},
     {JNE, "JNE"}, {JG, "JG"}, {JLE, "JLE"}, {JGE, "JGE"},
     {ENTER, "ENTER"}, {LEAVE, "LEAVE"},
     {COPY, "COPY"}, {FILL, "FILL"}, {CMP_MEM, "CMP_MEM"},
-    {MNI, "MNI"}, {IN, "IN"}, 
+    {MNI, "MNI"}, {OP_IN, "IN"}, 
     {MALLOC, "MALLOC"}, {FREE, "FREE"}
 };
 
@@ -173,11 +173,11 @@ void printHexBytes(const std::vector<uint8_t>& vec, size_t start, size_t end) {
 int getOperandCount(Opcode opcode) {
     switch (opcode) {
         case MOV: case ADD: case SUB: case MUL: case DIV: case CMP: case AND: case OR: case XOR: case SHL: case SHR:
-        case GETARG: case COPY: case FILL: case CMP_MEM: case OUT: case COUT: case OUTCHAR:
+        case GETARG: case COPY: case FILL: case CMP_MEM: case OP_OUT: case COUT: case OUTCHAR:
             return 2;
         case OUTSTR: case MOVTO: case MOVADDR:
             return 3;
-        case INC: case JMP: case JE: case JL: case CALL: case PUSH: case POP: case JNE: case JG: case JLE: case JGE: case ENTER: case ARGC: case IN:
+        case INC: case JMP: case JE: case JL: case CALL: case PUSH: case POP: case JNE: case JG: case JLE: case JGE: case ENTER: case ARGC: case OP_IN:
             return 1;
         case RET: case LEAVE: case HLT:
             return 0;

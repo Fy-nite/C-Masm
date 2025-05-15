@@ -18,12 +18,10 @@
 #include <cstring>
 #include <math.h>
 #ifdef _WIN32
-#include <libloaderapi.h>
+#include <windows.h>
 #else
 #include <limits.h> // For PATH_MAX
 #include <sys/stat.h> // For stat()
-#endif
-#ifndef _WIN32
 #include <unistd.h>
 #endif
 
@@ -680,7 +678,7 @@ Opcode Compiler::getOpcode(const std::string& mnemonic) {
         {"MOV", MOV}, {"ADD", ADD}, {"SUB", SUB}, {"MUL", MUL}, {"DIV", DIV}, {"INC", INC},
         {"JMP", JMP}, {"CMP", CMP}, {"JE", JE}, {"JL", JL}, {"CALL", CALL}, {"RET", RET},
         {"PUSH", PUSH}, {"POP", POP},
-        {"OUT", OUT}, {"COUT", COUT}, {"OUTSTR", OUTSTR}, {"OUTCHAR", OUTCHAR},
+        {"OUT", OP_OUT}, {"COUT", COUT}, {"OUTSTR", OUTSTR}, {"OUTCHAR", OUTCHAR},
         {"HLT", HLT}, {"ARGC", ARGC}, {"GETARG", GETARG},
         {"DB", DB},
         {"AND", AND}, {"OR", OR}, {"XOR", XOR}, {"NOT", NOT}, {"SHL", SHL}, {"SHR", SHR},
@@ -689,7 +687,7 @@ Opcode Compiler::getOpcode(const std::string& mnemonic) {
         {"ENTER", ENTER}, {"LEAVE", LEAVE},
         {"COPY", COPY}, {"FILL", FILL}, {"CMP_MEM", CMP_MEM},
         {"MNI", MNI},
-        {"IN", IN},
+        {"IN", OP_IN},
         {"MOVB", MOVB},
         {"SYSCALL", SYSCALL}
     };
