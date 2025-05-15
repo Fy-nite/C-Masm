@@ -17,15 +17,15 @@
 #include "operand_types.h"
 
 #ifdef _WIN32
-#include <io.h>
+    #include <io.h>
 #elif __MACOS__
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <unistd.h>
+    #include <sys/types.h>
+    #include <sys/uio.h>
+    #include <unistd.h>
 #elif __linux__
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
+    #include <sys/stat.h>
+    #include <fcntl.h>
+    #include <unistd.h>
 #endif
 
 std::vector<std::string> mniCallStack;
@@ -1839,27 +1839,32 @@ int Interpreter::execute() {
                         int ptr = registers[4];
                         int count = registers[3];
                         registers[0] = read(fd, ram.data()+ptr, count);
+                        break;
                     }
                     case 1: { // Write
                         int fd = registers[5];
                         int ptr = registers[4];
                         int count = registers[3];
                         registers[0] = write(fd, ram.data()+ptr, count);
+                        break;
                     }
                     case 2: {
                         int name = registers[5];
                         int flags = registers[4];
                         int mode = registers[3];
                         registers[0] = open(ram.data()+name, flags, mode);
+                        break;
                     }
                     case 3: {
                         int fd = registers[5];
                         registers[0] = close(fd);
+                        break;
                     }
                     case 5: {
                         int fd = registers[5];
                         int ptr = registers[4];
                         registers[0] = fstat(fd, (struct stat*)ram.data()+ptr);
+                        break;
                     }
                     case 9: {
                         int size = registers[5];
@@ -1880,14 +1885,17 @@ int Interpreter::execute() {
                         #else
                             std::cout << "Nanosleep is not implemented on windows\n" << std::endl;
                             exit = true;
+                            break;
                         #endif
                     }
                     case 60: {
                         exit = true;
                         exit_code = registers[5];
+                        break;
                     }
                     case 201: {
                         registers[0] = time((time_t*)ram.data()+registers[5]);
+                        break;
                     }
                     #ifdef _WIN32
                         #undef read
