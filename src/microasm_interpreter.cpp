@@ -24,13 +24,6 @@
     #include <time.h>
 #else
     #include <io.h>
-    #define read _read
-    #define write _write
-    #define open _open
-    #define close _close
-    #define fstat _fstat
-    #define nanosleep _nanosleep
-    #define stat _stat64i32
 #endif
 
 std::vector<std::string> mniCallStack;
@@ -1832,7 +1825,11 @@ int Interpreter::execute() {
                 int syscall = registers[0];
                 if (debugMode) std::cout << "[Debug][Interpreter]   Syscall: " << std::to_string(syscall) << std::endl;
                 switch (syscall)
-                {
+                {  
+                    #define read _read
+                    #define write _write
+                    #define open _open
+                    #define close _close
                     case 0: {
                         int fd = registers[5];
                         int ptr = registers[4];
@@ -1893,6 +1890,11 @@ int Interpreter::execute() {
                         throw std::runtime_error("Unimplemented or unknown opcode encountered during execution: 0x" +
                         std::to_string(syscall));
                         break;
+                    
+                    #undef read
+                    #undef write
+                    #undef open
+                    #undef close
                 }
                 break;
             }
