@@ -1,0 +1,8 @@
+lbl main
+mov rax 2
+db $0 "meow.meow"
+mov RDI 0
+mov RSI 2
+mov RDX 0
+syscall
+out 1 RAX
