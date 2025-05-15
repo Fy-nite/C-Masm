@@ -18,10 +18,12 @@
 
 #ifdef _WIN32
 #include <io.h>
-#elif __MACOS__
+#elif __APPLE__
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 #elif __linux__
 #include <sys/stat.h>
 #include <fcntl.h>
