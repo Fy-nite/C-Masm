@@ -18,9 +18,13 @@
 
 #ifdef _WIN32
 #include <io.h>
-#elif __linux__ || __MACOS__
+#elif __MACOS__
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <unistd.h>
+#elif __linux__
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #endif
 
