@@ -16,14 +16,12 @@
 #include "microasm_compiler.h"
 #include "operand_types.h"
 
-#ifndef __linux__
-    #include <sys/types.h>
-    #include <sys/stat.h>
-    #include <fcntl.h>
-    #include <unistd.h>
-    #include <time.h>
-#else
-    #include <io.h>
+#ifdef _WIN32
+#include <io.h>
+#elif __linux__ || __MACOS__
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
 #endif
 
 std::vector<std::string> mniCallStack;
@@ -1825,11 +1823,13 @@ int Interpreter::execute() {
                 int syscall = registers[0];
                 if (debugMode) std::cout << "[Debug][Interpreter]   Syscall: " << std::to_string(syscall) << std::endl;
                 switch (syscall)
-                {  
-                    #define read _read
-                    #define write _write
-                    #define open _open
-                    #define close _close
+                {
+                    #ifdef _WIN32
+                        #define read _read
+                        #define write _write
+                        #define open _open
+                        #define close _close
+                    #endif
                     case 0: {
                         int fd = registers[5];
                         int ptr = registers[4];
@@ -1885,11 +1885,12 @@ int Interpreter::execute() {
                     case 201: {
                         registers[0] = time((time_t*)ram.data()+registers[5]);
                     }
-                    
-                    #undef read
-                    #undef write
-                    #undef open
-                    #undef close
+                    #ifdef _WIN32
+                        #undef read
+                        #undef write
+                        #undef open
+                        #undef close
+                    #endif
                 }
                 break;
             }
